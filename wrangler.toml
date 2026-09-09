@@ -1,0 +1,24 @@
+name = "open-perch"
+main = "src/server/index.ts"
+compatibility_date = "2026-04-15"
+compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = "./dist"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+# Run the Worker first for anything it must answer itself: the public page, the
+# counting redirect and the avatars. Without this the SPA fallback serves
+# index.html for all of them. The deployed build ignores this file and reads
+# api.server_routes from clawnify.json instead, so the two lists must stay in
+# step — this one works locally and tells you nothing about production.
+run_worker_first = ["/api/*", "/llms.txt", "/p/*", "/r/*", "/m/*"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "open-perch-db"
+database_id = "local"
+
+[[r2_buckets]]
+binding = "UPLOADS"
+bucket_name = "open-perch-uploads"
