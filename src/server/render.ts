@@ -224,7 +224,7 @@ input[type=email]{flex:1 1 12rem;padding:14px 16px;border-radius:${t.corner};fon
   border:1px solid color-mix(in oklab,${t.foreground} 22%,transparent)}
 input[type=email]::placeholder{color:inherit;opacity:.55}
 input[type=email]:focus-visible{outline:2px solid ${t.accent};outline-offset:2px}
-button{padding:14px 20px;border-radius:${t.corner};border:0;background:${t.accent};
+button{flex:1 1 7rem;padding:14px 20px;border-radius:${t.corner};border:0;background:${t.accent};
   color:${t.onAccent};font:inherit;font-weight:500;cursor:pointer}
 button:focus-visible{outline:2px solid ${t.foreground};outline-offset:2px}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}

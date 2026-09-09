@@ -376,34 +376,27 @@ const KINDS: { kind: BlockKind; label: string; hint: string }[] = [
   { kind: "email", label: "Email capture", hint: "One field and a button. Addresses land in this app." },
 ];
 
-/** `meta` is a JSON string on the wire; the only field in it today is `note`. */
-function readNote(meta: string): string {
-  try {
-    return (JSON.parse(meta) as { note?: string }).note ?? "";
-  } catch {
-    return "";
-  }
-}
-
 /**
  * The editor. Rows on the left, the real page on the right.
  *
  * Every change is saved as it is made rather than behind a Save button: there
  * is no draft state to lose, and the preview beside it is the confirmation.
- */
-function PageEditor({ page: initial, onBack, onChanged }: { page: PageRow; onBack: () => void; onChanged: () => void }) {
+ */function PageEditor({ page: initial, onBack, onChanged }: { page: PageRow; onBack: () => void; onChanged: () => void }) {
   const [page, setPage] = useState<Page | null>(null);
   const [blocks, setBlocks] = useState<Block[]>([]);
+  const [clicks, setClicks] = useState<Record<string, number>>({});
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
-  const [tab, setTab] = useState<"build" | "stats">("build");
+  const [panel, setPanel] = useState<"rows" | "design">("rows");
   const [error, setError] = useState<string | null>(null);
-  // Bumped after every write so the preview iframe refetches.
   const [rev, setRev] = useState(0);
 
   const refresh = useCallback(async () => {
-    const [p, b] = await Promise.all([api.page(initial.id), api.blocks(initial.id)]);
+    const [p, b, s] = await Promise.all([api.page(initial.id), api.blocks(initial.id), api.pageStats(initial.id)]);
     setPage(p);
     setBlocks(b.items);
+    // Clicks belong on the row they describe, not on a separate screen: the
+    // number is why you would edit that row in the first place.
+    setClicks(Object.fromEntries(s.items.map((r) => [r.id, r.clicks_30d])));
     setRev((n) => n + 1);
     onChanged();
   }, [initial.id, onChanged]);
@@ -413,7 +406,6 @@ function PageEditor({ page: initial, onBack, onChanged }: { page: PageRow; onBac
     void api.templates().then((d) => setTemplates(d.items));
   }, [refresh]);
 
-  /** Run a write, then reload. Errors surface rather than leaving stale rows. */
   const write = useCallback(
     async (fn: () => Promise<unknown>) => {
       try {
@@ -445,32 +437,31 @@ function PageEditor({ page: initial, onBack, onChanged }: { page: PageRow; onBac
   })();
 
   return (
-    <>
-      <div className="mt-4 flex flex-wrap items-center gap-2">
-        <button type="button" onClick={onBack} className="h-7 rounded-sm px-3 text-sm text-muted hover:bg-sunken">
-          Back
-        </button>
-        <div className="flex rounded-sm bg-sunken p-0.5">
-          {(["build", "stats"] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              aria-pressed={tab === t}
-              className={`h-6 rounded-[4px] px-3 text-sm capitalize ${tab === t ? "bg-surface font-medium shadow-[inset_0_0_0_1px_var(--border)]" : "text-muted"}`}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-
-        <span className="ml-auto flex items-center gap-2">
+    <div className="mt-4 grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={onBack} className="h-8 rounded-md px-2.5 text-sm text-muted hover:bg-sunken">
+            ← Pages
+          </button>
+          <div className="flex rounded-md bg-sunken p-0.5">
+            {(["rows", "design"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setPanel(t)}
+                aria-pressed={panel === t}
+                className={`h-7 rounded-[5px] px-3 text-sm capitalize ${panel === t ? "bg-surface font-medium shadow-[inset_0_0_0_1px_var(--border)]" : "text-muted"}`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
           {page && (
-            <>
+            <span className="ml-auto flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => void write(() => api.patchPage(page.id, { published: page.published ? 0 : 1 }))}
-                className="h-7 rounded-sm px-3 text-sm font-medium shadow-[inset_0_0_0_1px_var(--border)] hover:bg-sunken"
+                className="h-8 rounded-md px-3 text-sm font-medium shadow-[inset_0_0_0_1px_var(--border)] hover:bg-sunken"
               >
                 {page.published ? "Unpublish" : "Publish"}
               </button>
@@ -478,159 +469,223 @@ function PageEditor({ page: initial, onBack, onChanged }: { page: PageRow; onBac
                 href={`/p/${page.slug}`}
                 target="_blank"
                 rel="noreferrer"
-                className="h-7 rounded-sm bg-primary px-3 text-sm font-medium leading-7 text-on-primary hover:bg-primary-hover"
+                className="h-8 rounded-md bg-primary px-3 text-sm font-medium leading-8 text-on-primary hover:bg-primary-hover"
               >
                 Open
               </a>
-            </>
+            </span>
           )}
-        </span>
+        </div>
+
+        {error && <div className="mt-4 rounded-lg bg-danger-tint px-4 py-3 text-sm text-danger">{error}</div>}
+
+        {page && <Profile page={page} onPatch={(b) => void write(() => api.patchPage(page.id, b))} />}
+
+        {panel === "design" ? (
+          <Design
+            preset={preset}
+            templates={templates}
+            onPick={(slug) => page && void write(() => api.patchPage(page.id, { theme: JSON.stringify(slug ? { preset: slug } : {}) }))}
+          />
+        ) : (
+          <>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {KINDS.map((k) => (
+                <button
+                  key={k.kind}
+                  type="button"
+                  title={k.hint}
+                  onClick={() =>
+                    void write(() =>
+                      api.addBlock(initial.id, {
+                        kind: k.kind,
+                        label: k.kind === "header" ? "Section" : k.kind === "email" ? "Get the newsletter" : "New link",
+                        // A link and an embed are refused without one, and a
+                        // placeholder is easier to replace than an error.
+                        url: k.kind === "link" || k.kind === "embed" ? "https://example.com" : undefined,
+                      }),
+                    )
+                  }
+                  className={`h-9 rounded-md px-3.5 text-sm font-medium ${k.kind === "link" ? "bg-primary text-on-primary hover:bg-primary-hover" : "shadow-[inset_0_0_0_1px_var(--border)] hover:bg-sunken"}`}
+                >
+                  + {k.label}
+                </button>
+              ))}
+            </div>
+
+            {blocks.length === 0 ? (
+              <p className="card mt-4 px-5 py-8 text-center text-sm text-muted">
+                Nothing on the page yet. Add the first row above.
+              </p>
+            ) : (
+              <ul className="mt-4 flex flex-col gap-3">
+                {blocks.map((b, i) => (
+                  <BlockCard
+                    key={b.id}
+                    block={b}
+                    clicks={clicks[b.id] ?? 0}
+                    first={i === 0}
+                    last={i === blocks.length - 1}
+                    onMove={(d) => move(i, d)}
+                    onPatch={(body) => void write(() => api.patchBlock(b.id, body))}
+                    onDelete={() => void write(() => api.deleteBlock(b.id))}
+                  />
+                ))}
+              </ul>
+            )}
+          </>
+        )}
       </div>
 
-      {error && <div className="mt-4 rounded-lg bg-danger-tint px-4 py-3 text-sm text-danger">{error}</div>}
-
-      {tab === "stats" ? (
-        <PageStats pageId={initial.id} />
-      ) : (
-        <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="min-w-0">
-            {page && (
-              <section className="card p-5">
-                <h2 className="text-[1.0625rem] font-semibold">This page</h2>
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <Field
-                    label="Title"
-                    value={page.title}
-                    onCommit={(v) => v !== page.title && void write(() => api.patchPage(page.id, { title: v }))}
-                  />
-                  <Field
-                    label="Subtitle"
-                    value={page.subtitle}
-                    onCommit={(v) => v !== page.subtitle && void write(() => api.patchPage(page.id, { subtitle: v }))}
-                  />
-                  <label className="block text-sm">
-                    <span className="text-muted">Template</span>
-                    <select
-                      value={preset}
-                      onChange={(e) =>
-                        void write(() => api.patchPage(page.id, { theme: JSON.stringify({ preset: e.currentTarget.value }) }))
-                      }
-                      className="mt-1 h-8 w-full rounded-sm bg-surface px-2 text-sm shadow-[inset_0_0_0_1px_var(--border)]"
-                    >
-                      <option value="">Default</option>
-                      {templates.map((t) => (
-                        <option key={t.slug} value={t.slug}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="text-sm">
-                    <span className="text-muted">Address</span>
-                    <p className="mt-1 flex h-8 items-center font-mono text-xs text-faint">/p/{page.slug}</p>
-                  </div>
-                </div>
-              </section>
-            )}
-
-            <section className="card mt-5">
-              <header className="flex items-center justify-between px-5 py-4">
-                <h2 className="text-[1.0625rem] font-semibold">Rows</h2>
-                <span className="text-sm text-muted">{blocks.length}</span>
-              </header>
-
-              {blocks.length === 0 ? (
-                <p className="px-5 pb-5 text-sm text-muted">
-                  Nothing on the page yet. Add the first row below.
-                </p>
-              ) : (
-                <ul>
-                  {blocks.map((b, i) => (
-                    <BlockRow
-                      key={b.id}
-                      block={b}
-                      first={i === 0}
-                      last={i === blocks.length - 1}
-                      onMove={(d) => move(i, d)}
-                      onPatch={(body) => void write(() => api.patchBlock(b.id, body))}
-                      onDelete={() => void write(() => api.deleteBlock(b.id))}
-                    />
-                  ))}
-                </ul>
-              )}
-
-              <div className="flex flex-wrap gap-2 border-t border-border px-5 py-4">
-                {KINDS.map((k) => (
-                  <button
-                    key={k.kind}
-                    type="button"
-                    title={k.hint}
-                    onClick={() =>
-                      void write(() =>
-                        api.addBlock(initial.id, {
-                          kind: k.kind,
-                          label: k.kind === "header" ? "Section" : k.kind === "email" ? "Get the newsletter" : "New row",
-                          // A link and an embed are refused without one, and a
-                          // placeholder is easier to replace than an error.
-                          url: k.kind === "link" || k.kind === "embed" ? "https://example.com" : undefined,
-                        }),
-                      )
-                    }
-                    className="h-7 rounded-sm px-3 text-sm font-medium shadow-[inset_0_0_0_1px_var(--border)] hover:bg-sunken"
-                  >
-                    Add {k.label.toLowerCase()}
-                  </button>
-                ))}
-              </div>
-            </section>
-          </div>
-
-          {/* The page itself, at the width most of its visitors use. */}
-          <aside className="lg:sticky lg:top-8 lg:self-start">
-            <div className="card overflow-hidden">
-              <header className="flex items-center justify-between px-4 py-3">
-                <h2 className="text-sm font-semibold">Preview</h2>
-                <span className="text-xs text-faint">{page?.published ? "Live" : "Draft"}</span>
-              </header>
-              <iframe
-                key={rev}
-                src={`/api/pages/${initial.id}/preview`}
-                title="Page preview"
-                className="block w-full border-0 border-t border-border bg-sunken"
-                style={{ height: 620 }}
-              />
-            </div>
-          </aside>
-        </div>
-      )}
-    </>
+      <aside className="lg:sticky lg:top-8 lg:self-start">
+        <Phone src={`/api/pages/${initial.id}/preview`} rev={rev} live={!!page?.published} />
+      </aside>
+    </div>
   );
 }
 
-/** A text input that saves when you leave it or press Enter, never per keystroke. */
-function Field({ label, value, onCommit, mono }: { label: string; value: string; onCommit: (v: string) => void; mono?: boolean }) {
-  const [draft, setDraft] = useState(value);
-  useEffect(() => setDraft(value), [value]);
+/**
+ * The preview, at the width almost every visitor arrives on. No device frame:
+ * a page judged in a desktop-width box is judged at a width nobody sees it at,
+ * but the chrome around it is decoration and gets in the way of the page.
+ */
+function Phone({ src, rev, live }: { src: string; rev: number; live: boolean }) {
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between px-1">
+        <h2 className="text-sm font-semibold">Preview</h2>
+        <span className="text-xs text-faint">{live ? "Live" : "Draft"}</span>
+      </div>
+      <div className="card mx-auto w-[320px] overflow-hidden">
+        <iframe
+          key={rev}
+          src={src}
+          title="Page preview"
+          scrolling="no"
+          className="block w-full border-0"
+          style={{ height: 600 }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** The page's own identity, edited where you see it. */
+function Profile({ page, onPatch }: { page: Page; onPatch: (b: Partial<Page>) => void }) {
+  return (
+    <section className="card mt-4 flex items-start gap-4 p-5">
+      <div
+        aria-hidden
+        className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-sunken text-lg font-semibold text-muted"
+      >
+        {page.title.slice(0, 1).toUpperCase()}
+      </div>
+      <div className="min-w-0 flex-1">
+        <InlineEdit
+          value={page.title}
+          onCommit={(v) => v && v !== page.title && onPatch({ title: v })}
+          className="text-[1.0625rem] font-semibold"
+          label="Page title"
+        />
+        <InlineEdit
+          value={page.subtitle}
+          placeholder="Add a bio"
+          onCommit={(v) => v !== page.subtitle && onPatch({ subtitle: v })}
+          className="text-sm text-muted"
+          label="Bio"
+        />
+        <p className="mt-2 font-mono text-xs text-faint">/p/{page.slug}</p>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The look, as a list of decisions rather than one dropdown. Today there is a
+ * single decision — which template — and it is presented as swatches, because
+ * choosing a look from the word "Paper" asks you to remember what Paper is.
+ */
+function Design({
+  preset,
+  templates,
+  onPick,
+}: {
+  preset: string;
+  templates: TemplateRow[];
+  onPick: (slug: string) => void;
+}) {
+  return (
+    <section className="card mt-4 p-5">
+      <h2 className="text-[1.0625rem] font-semibold">Template</h2>
+      <p className="mt-1 text-sm text-muted">
+        The whole look: typeface, buttons, corners, canvas. Edit one as markdown under Templates.
+      </p>
+      <ul className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+        {templates.map((t) => (
+          <li key={t.slug}>
+            <button
+              type="button"
+              onClick={() => onPick(t.slug)}
+              aria-pressed={preset === t.slug}
+              className={`w-full overflow-hidden rounded-lg text-left ${preset === t.slug ? "shadow-[0_0_0_2px_var(--primary)]" : "shadow-[inset_0_0_0_1px_var(--border)] hover:shadow-[inset_0_0_0_1px_var(--ring)]"}`}
+            >
+              <Swatch theme={t.theme} />
+              <span className="block truncate px-2.5 py-2 text-xs font-medium">{t.name}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/**
+ * A template at a glance: its canvas, and two buttons drawn the way it draws
+ * them. Small enough to be honest — it claims to show the palette and the
+ * button treatment, and it shows exactly those.
+ */
+function Swatch({ theme }: { theme: string }) {
+  let t: Record<string, string> = {};
+  try {
+    t = JSON.parse(theme) as Record<string, string>;
+  } catch {
+    // A swatch is never worth an error; an unreadable theme draws the default.
+  }
+
+  const bg = t.background ?? "#ffffff";
+  const fg = t.foreground ?? "#1b1a19";
+  const accent = t.accent ?? "#1b1a19";
+  const canvas = t.background2 ? `linear-gradient(${t.angle ?? 160}deg,${bg},${t.background2})` : bg;
+  const radius = t.corner === "pill" ? 999 : t.corner === "sharp" ? 0 : 6;
+
+  const pill = (filled: boolean): React.CSSProperties =>
+    t.button === "fill" || (filled && t.button !== "outline")
+      ? { background: accent, borderRadius: radius }
+      : t.button === "shadow"
+        ? { border: `1.5px solid ${fg}`, boxShadow: `2px 2px 0 0 ${fg}`, borderRadius: radius }
+        : { border: `1px solid ${fg}59`, borderRadius: radius };
 
   return (
-    <label className="block text-sm">
-      <span className="text-muted">{label}</span>
-      <input
-        value={draft}
-        onChange={(e) => setDraft(e.currentTarget.value)}
-        onBlur={() => onCommit(draft)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") e.currentTarget.blur();
-          if (e.key === "Escape") setDraft(value);
-        }}
-        className={`mt-1 h-8 w-full rounded-sm bg-surface px-2 text-sm shadow-[inset_0_0_0_1px_var(--border)] focus-visible:outline-2 focus-visible:outline-ring ${mono ? "font-mono text-xs" : ""}`}
-      />
-    </label>
+    <span className="block px-3 py-3.5" style={{ background: canvas }}>
+      <span className="mx-auto mb-2 block h-3 w-8 rounded-full" style={{ background: fg, opacity: 0.85 }} />
+      <span className="block h-4" style={pill(true)} />
+      <span className="mt-1.5 block h-4" style={pill(false)} />
+    </span>
   );
 }
 
-function BlockRow({
+/** `meta` is a JSON string on the wire; the only field in it today is `note`. */
+function readNote(meta: string): string {
+  try {
+    return (JSON.parse(meta) as { note?: string }).note ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function BlockCard({
   block,
+  clicks,
   first,
   last,
   onMove,
@@ -638,6 +693,7 @@ function BlockRow({
   onDelete,
 }: {
   block: Block;
+  clicks: number;
   first: boolean;
   last: boolean;
   onMove: (delta: number) => void;
@@ -646,45 +702,137 @@ function BlockRow({
 }) {
   const takesUrl = block.kind === "link" || block.kind === "embed";
   const takesNote = block.kind === "link";
+  const note = readNote(block.meta);
 
   return (
-    <li className={`border-t border-border px-5 py-4 ${block.active ? "" : "opacity-55"}`}>
-      <div className="flex items-center gap-2">
-        <Badge>{block.kind}</Badge>
-        <span className="ml-auto flex items-center gap-1">
-          <IconButton label="Move up" disabled={first} onClick={() => onMove(-1)}>↑</IconButton>
-          <IconButton label="Move down" disabled={last} onClick={() => onMove(1)}>↓</IconButton>
-          <button
-            type="button"
-            onClick={() => onPatch({ active: block.active ? 0 : 1 })}
-            className="h-6 rounded-sm px-2 text-xs text-muted hover:bg-sunken"
-          >
-            {block.active ? "Hide" : "Show"}
-          </button>
-          <button
-            type="button"
-            onClick={onDelete}
-            className="h-6 rounded-sm px-2 text-xs text-danger hover:bg-danger-tint"
-          >
-            Delete
-          </button>
+    <li className={`card p-4 ${block.active ? "" : "opacity-60"}`}>
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <InlineEdit
+            value={block.label}
+            onCommit={(v) => v && v !== block.label && onPatch({ label: v })}
+            className="text-sm font-medium"
+            label="Label"
+          />
+          {takesUrl && (
+            <InlineEdit
+              value={block.url}
+              onCommit={(v) => v !== block.url && onPatch({ url: v })}
+              className="font-mono text-xs text-muted"
+              label="URL"
+            />
+          )}
+          {takesNote && (
+            <InlineEdit
+              value={note}
+              placeholder="Add a note"
+              onCommit={(v) => v !== note && onPatch({ meta: JSON.stringify(v ? { note: v } : {}) })}
+              className="text-xs text-muted"
+              label="Note"
+            />
+          )}
+        </div>
+
+        <span className="flex shrink-0 items-center gap-3">
+          <Badge>{block.kind}</Badge>
+          <Switch
+            on={block.active === 1}
+            label={block.active ? "Hide this row" : "Show this row"}
+            onChange={() => onPatch({ active: block.active ? 0 : 1 })}
+          />
         </span>
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-        <Field label="Label" value={block.label} onCommit={(v) => v !== block.label && onPatch({ label: v })} />
-        {takesUrl && (
-          <Field label="URL" mono value={block.url} onCommit={(v) => v !== block.url && onPatch({ url: v })} />
-        )}
-        {takesNote && (
-          <Field
-            label="Note"
-            value={readNote(block.meta)}
-            onCommit={(v) => v !== readNote(block.meta) && onPatch({ meta: JSON.stringify(v ? { note: v } : {}) })}
-          />
-        )}
+      <div className="mt-2.5 flex items-center gap-1 border-t border-border pt-2 text-xs text-muted">
+        {/* Order is changed with buttons rather than dragging: the same two
+            decisions, and they work from a keyboard. */}
+        <IconButton label="Move up" disabled={first} onClick={() => onMove(-1)}>↑</IconButton>
+        <IconButton label="Move down" disabled={last} onClick={() => onMove(1)}>↓</IconButton>
+        {/* Hiding keeps the history; deleting does not. The count sits at the
+            moment of that decision so the difference is visible. */}
+        <span className="tnum ml-2">{clicks} clicks, 30 days</span>
+        <button type="button" onClick={onDelete} className="ml-auto rounded-sm px-2 py-1 text-danger hover:bg-danger-tint">
+          Delete
+        </button>
       </div>
     </li>
+  );
+}
+
+/**
+ * Text that becomes an input when you click it. Committed on Enter or on
+ * leaving, abandoned on Escape — never per keystroke, so the preview settles
+ * on what you meant rather than flickering through what you typed.
+ */
+function InlineEdit({
+  value,
+  onCommit,
+  className = "",
+  label,
+  placeholder,
+}: {
+  value: string;
+  onCommit: (v: string) => void;
+  className?: string;
+  label: string;
+  placeholder?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        aria-label={`${label}: ${value || placeholder || "empty"}. Click to edit.`}
+        className={`-mx-1 block w-full truncate rounded-sm px-1 py-0.5 text-left hover:bg-sunken ${className} ${value ? "" : "text-faint"}`}
+      >
+        {value || placeholder || "—"}
+      </button>
+    );
+  }
+
+  return (
+    <input
+      autoFocus
+      value={draft}
+      aria-label={label}
+      placeholder={placeholder}
+      onChange={(e) => setDraft(e.currentTarget.value)}
+      onBlur={() => {
+        setEditing(false);
+        onCommit(draft.trim());
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          setDraft(value);
+          setEditing(false);
+        }
+      }}
+      className={`-mx-1 block w-full rounded-sm bg-surface px-1 py-0.5 shadow-[inset_0_0_0_1px_var(--border)] focus-visible:outline-2 focus-visible:outline-ring ${className}`}
+    />
+  );
+}
+
+/** On or off, said in a way a screen reader can read. */
+function Switch({ on, label, onChange }: { on: boolean; label: string; onChange: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      title={label}
+      onClick={onChange}
+      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${on ? "bg-success" : "bg-sunken shadow-[inset_0_0_0_1px_var(--border)]"}`}
+    >
+      <span
+        className={`absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow-[inset_0_0_0_1px_var(--border)] transition-[left] ${on ? "left-[18px]" : "left-0.5"}`}
+      />
+    </button>
   );
 }
 
@@ -696,14 +844,13 @@ function IconButton({ label, disabled, onClick, children }: { label: string; dis
       title={label}
       disabled={disabled}
       onClick={onClick}
-      className="h-6 w-6 rounded-sm text-sm text-muted hover:bg-sunken disabled:opacity-30"
+      className="h-5 w-5 rounded-sm text-xs text-faint hover:bg-sunken hover:text-muted disabled:opacity-25"
     >
       {children}
     </button>
   );
 }
 
-/** Creating a page. One field, because everything else is editable after. */
 function NewPage({ onCreated, onOpen }: { onCreated: () => void; onOpen: (p: PageRow) => void }) {
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
