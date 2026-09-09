@@ -14,12 +14,31 @@ function staleWeeks(iso: string): number {
   return Math.floor((Date.now() - new Date(iso).getTime()) / (7 * 86_400_000));
 }
 
+/**
+ * Which screen a path names. The nav has always declared these hrefs; until now
+ * nothing read them, so a deep link opened the overview, the back button left
+ * the app, and a page being edited could not be linked to.
+ */
+function routeOf(path: string): { view: "overview" | "templates"; pageId: string | null } {
+  const edit = /^\/pages\/([\w-]+)$/.exec(path);
+  if (edit) return { view: "overview", pageId: edit[1] };
+  return { view: path === "/templates" ? "templates" : "overview", pageId: null };
+}
+
 export function App() {
   const [rows, setRows] = useState<PageRow[]>([]);
   const [selected, setSelected] = useState<PageRow | null>(null);
-  const [view, setView] = useState<"overview" | "templates">("overview");
+  const [view, setView] = useState<"overview" | "templates">(() => routeOf(window.location.pathname).view);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  /** Change screen and say so in the address bar, so the two never disagree. */
+  const go = useCallback((path: string, next: { view?: "overview" | "templates"; page?: PageRow | null }) => {
+    if (window.location.pathname !== path) window.history.pushState({}, "", path);
+    reportLocation(path);
+    if (next.view !== undefined) setView(next.view);
+    if (next.page !== undefined) setSelected(next.page);
+  }, []);
 
   const load = useCallback(async () => {
     try {
@@ -38,6 +57,23 @@ export function App() {
     reportLocation(window.location.pathname);
   }, [load]);
 
+  // Back and forward move between screens rather than out of the app.
+  useEffect(() => {
+    const onPop = () => {
+      const r = routeOf(window.location.pathname);
+      setView(r.view);
+      setSelected(r.pageId ? (rows.find((p) => p.id === r.pageId) ?? null) : null);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, [rows]);
+
+  // A page opened by URL can only be resolved once the list has arrived.
+  useEffect(() => {
+    const { pageId } = routeOf(window.location.pathname);
+    if (pageId && !selected) setSelected(rows.find((p) => p.id === pageId) ?? null);
+  }, [rows, selected]);
+
   const totalBroken = rows.reduce((n, r) => n + r.broken, 0);
   const totalClicks = rows.reduce((n, r) => n + r.clicks_7d, 0);
   const stale = rows.filter((r) => staleWeeks(r.updated_at) >= 8).length;
@@ -50,8 +86,8 @@ export function App() {
         groups={[{ items: NAV }]}
         active={view === "templates" ? "templates" : selected ? "pages" : "overview"}
         onNavigate={(item) => {
-          setSelected(null);
-          setView(item.id === "templates" ? "templates" : "overview");
+          const templates = item.id === "templates";
+          go(templates ? "/templates" : "/", { view: templates ? "templates" : "overview", page: null });
         }}
       />
 
@@ -72,7 +108,7 @@ export function App() {
         )}
 
         {selected ? (
-          <PageEditor page={selected} onBack={() => setSelected(null)} onChanged={load} />
+          <PageEditor page={selected} onBack={() => go("/", { view: "overview", page: null })} onChanged={load} />
         ) : view === "templates" ? (
           <Templates />
         ) : (
@@ -87,7 +123,7 @@ export function App() {
             <section className="card mt-6">
               <header className="flex items-center justify-between px-5 py-4">
                 <h2 className="text-[1.0625rem] font-semibold">Pages</h2>
-                <NewPage onCreated={load} onOpen={setSelected} />
+                <NewPage onCreated={load} onOpen={(p) => go(`/pages/${p.id}`, { page: p })} />
               </header>
               {loading ? (
                 <p className="px-5 pb-5 text-sm text-muted">Loading.</p>
@@ -101,7 +137,7 @@ export function App() {
                     <li key={row.id} className="border-t border-border first:border-t-0">
                       <button
                         type="button"
-                        onClick={() => setSelected(row)}
+                        onClick={() => go(`/pages/${row.id}`, { page: row })}
                         className="flex h-12 w-full items-center gap-3 px-5 text-left hover:bg-sunken focus-visible:outline-2 focus-visible:outline-ring"
                       >
                         <span className="min-w-0 flex-1 truncate text-sm font-medium">{row.title}</span>

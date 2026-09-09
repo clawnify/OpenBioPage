@@ -20,9 +20,12 @@ export default defineConfig({
         changeOrigin: true,
         headers: { "X-Clawnify-Org-Id": "local-dev-org", "X-Clawnify-Caller": "user" },
       },
-      "/p": { target: "http://localhost:8792", changeOrigin: true },
-      "/r": { target: "http://localhost:8792", changeOrigin: true },
-      "/m": { target: "http://localhost:8792", changeOrigin: true },
+      // Trailing slashes matter: these are prefix matches, so a bare "/p" also
+      // catches the admin's own /pages/{id} route and hands it to the Worker,
+      // which answers with the built index.html and a blank screen.
+      "/p/": { target: "http://localhost:8792", changeOrigin: true },
+      "/r/": { target: "http://localhost:8792", changeOrigin: true },
+      "/m/": { target: "http://localhost:8792", changeOrigin: true },
     },
   },
 });
