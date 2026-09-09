@@ -25,6 +25,10 @@ around it:
   typeface, button style, corner and canvas. A page names one and overrides what
   it wants. None of them costs a network request, because the type is a system
   stack and the gradients are CSS.
+- **A person can build the page.** Create it, add rows, retitle them, reorder,
+  hide one without losing its click history, pick a template, publish. The real
+  page sits beside the editor and updates on every save, so the confirmation
+  that a change worked is the change itself.
 - **A template is a document, not a dropdown.** Every look downloads as
   markdown: the fields in a frontmatter block, then prose saying what it is for
   and which rules matter. Edit it yourself or hand it to an agent, paste it

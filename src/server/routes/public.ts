@@ -16,7 +16,7 @@
 import { get, query, run } from "../db.js";
 import { uid, now, type App } from "../env.js";
 import { renderPage, safeUrl, type RenderBlock, type RenderPage } from "../render.js";
-import { PRESETS, type Theme } from "../theme.js";
+import { customThemeFor } from "../page-theme.js";
 
 /** Cache the rendered page at the edge briefly: a link page is read far more
  *  often than it is edited, and an agency's change should still show up fast. */
@@ -31,7 +31,7 @@ export function registerPublic(app: App) {
     // claimed that hostname, so a client's domain never shows another client's
     // page even if someone guesses a slug.
     const host = new URL(c.req.url).hostname;
-    const page = await get<RenderPage & { published: number }>(
+    const page = await get<RenderPage & { org_id: string; published: number }>(
       `SELECT id, org_id, slug, title, subtitle, hostname, avatar_key, theme, footer_name, footer_url, published
          FROM pages
         WHERE slug = ? AND published = 1
@@ -50,7 +50,7 @@ export function registerPublic(app: App) {
     );
 
     const origin = new URL(c.req.url).origin;
-    return c.html(renderPage(page, blocks, origin, await customTheme(page)), 200, { "Cache-Control": PAGE_CACHE });
+    return c.html(renderPage(page, blocks, origin, await customThemeFor(page.org_id, page.theme)), 200, { "Cache-Control": PAGE_CACHE });
   });
 
   // ── The counting redirect ───────────────────────────────────────────────
@@ -141,31 +141,3 @@ export function registerPublic(app: App) {
   });
 }
 
-/**
- * The custom template a page names, if it names one.
- *
- * Costs a second read only when the preset is not built in, so the common page
- * — the eight shipped looks — still renders from a single query. The org comes
- * from the page row rather than the request, because this route is anonymous
- * and there is no caller to trust.
- */
-async function customTheme(page: { org_id?: string; theme: string }): Promise<Theme | null> {
-  let preset: string | undefined;
-  try {
-    preset = (JSON.parse(page.theme) as { preset?: string }).preset;
-  } catch {
-    return null;
-  }
-  if (!preset || preset in PRESETS || !page.org_id) return null;
-
-  const row = await get<{ theme: string }>(
-    `SELECT theme FROM templates WHERE org_id = ? AND slug = ?`,
-    [page.org_id, preset],
-  );
-  if (!row) return null;
-  try {
-    return JSON.parse(row.theme) as Theme;
-  } catch {
-    return null;
-  }
-}

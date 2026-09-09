@@ -37,6 +37,32 @@ export interface BlockStat {
   clicks_30d: number;
 }
 
+export type BlockKind = "link" | "header" | "embed" | "email";
+
+export interface Block {
+  id: string;
+  page_id: string;
+  kind: BlockKind;
+  label: string;
+  url: string;
+  meta: string;
+  position: number;
+  active: number;
+}
+
+export interface Page {
+  id: string;
+  slug: string;
+  title: string;
+  subtitle: string;
+  hostname: string | null;
+  theme: string;
+  footer_name: string;
+  footer_url: string;
+  published: number;
+  updated_at: string;
+}
+
 export interface TemplateRow {
   slug: string;
   name: string;
@@ -59,6 +85,18 @@ export const api = {
       `/api/pages/${id}/check`,
       { method: "POST" },
     ),
+  page: (id: string) => request<Page>(`/api/pages/${id}`),
+  patchPage: (id: string, body: Partial<Pick<Page, "title" | "subtitle" | "theme" | "footer_name" | "footer_url" | "published">>) =>
+    request<Page>(`/api/pages/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deletePage: (id: string) => request<{ deleted: boolean }>(`/api/pages/${id}`, { method: "DELETE" }),
+
+  blocks: (pageId: string) => request<{ items: Block[] }>(`/api/pages/${pageId}/blocks`),
+  addBlock: (pageId: string, body: { kind: BlockKind; label: string; url?: string; meta?: string }) =>
+    request<Block>(`/api/pages/${pageId}/blocks`, { method: "POST", body: JSON.stringify(body) }),
+  patchBlock: (id: string, body: Partial<Pick<Block, "label" | "url" | "meta" | "active">>) =>
+    request<Block>(`/api/blocks/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
+  deleteBlock: (id: string) => request<{ deleted: boolean }>(`/api/blocks/${id}`, { method: "DELETE" }),
+
   reorder: (pageId: string, ids: string[]) =>
     request<{ ok: boolean }>(`/api/pages/${pageId}/blocks/order`, { method: "POST", body: JSON.stringify({ ids }) }),
 };

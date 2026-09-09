@@ -3,6 +3,8 @@
 import { createRoute, orgId, z } from "@clawnify/app";
 import { get, query, run } from "../db.js";
 import { fail, now, ok, paginate, slugify, uid, PaginationQuery, type App } from "../env.js";
+import { customThemeFor } from "../page-theme.js";
+import { renderPage, type RenderBlock, type RenderPage } from "../render.js";
 
 const PageSchema = z
   .object({
@@ -109,6 +111,61 @@ export function registerPages(app: App) {
 
     const created = await get(`SELECT * FROM pages WHERE id = ?`, [id]);
     return c.json(created as never);
+  });
+
+  const read = createRoute({
+    method: "get",
+    path: "/api/pages/{id}",
+    tags: ["Pages"],
+    summary: "One page, with its brand and publication state",
+    request: { params: z.object({ id: z.string() }) },
+    responses: { 200: ok("The page", PageSchema), 403: fail("No organisation"), 404: fail("No such page") },
+  });
+
+  app.openapi(read, async (c) => {
+    const org = orgId(c);
+    if (!org) return c.json({ error: "No organisation on this request" }, 403);
+    const row = await get(`SELECT * FROM pages WHERE id = ? AND org_id = ?`, [c.req.valid("param").id, org]);
+    if (!row) return c.json({ error: "No such page" }, 404);
+    return c.json(row as never);
+  });
+
+  // The page as it will look, published or not. The public route deliberately
+  // refuses a draft, so without this you cannot see what you are editing until
+  // you have already shipped it.
+  const preview = createRoute({
+    method: "get",
+    path: "/api/pages/{id}/preview",
+    tags: ["Pages"],
+    summary: "The page rendered for editing, including while it is a draft",
+    request: { params: z.object({ id: z.string() }) },
+    responses: { 200: { description: "The page" }, 403: fail("No organisation"), 404: fail("No such page") },
+  });
+
+  app.openapi(preview, async (c) => {
+    const org = orgId(c);
+    if (!org) return c.json({ error: "No organisation on this request" }, 403);
+    const { id } = c.req.valid("param");
+
+    const page = await get<RenderPage & { org_id: string }>(
+      `SELECT id, org_id, slug, title, subtitle, hostname, avatar_key, theme, footer_name, footer_url
+         FROM pages WHERE id = ? AND org_id = ?`,
+      [id, org],
+    );
+    if (!page) return c.json({ error: "No such page" }, 404);
+
+    // Inactive blocks stay out, so the preview matches the page rather than the
+    // editor: a hidden row is hidden here too.
+    const blocks = await query<RenderBlock>(
+      `SELECT id, kind, label, url, meta FROM blocks
+        WHERE page_id = ? AND active = 1 ORDER BY position ASC, created_at ASC`,
+      [id],
+    );
+
+    const custom = await customThemeFor(page.org_id, page.theme);
+    return c.html(renderPage(page, blocks, new URL(c.req.url).origin, custom), 200, {
+      "Cache-Control": "no-store",
+    });
   });
 
   const update = createRoute({

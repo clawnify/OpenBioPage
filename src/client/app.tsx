@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppNav, reportLocation, type AppNavItem } from "@clawnify/app/client";
-import { api, type BlockStat, type PageRow, type TemplateRow } from "./api";
+import { api, type Block, type BlockKind, type BlockStat, type Page, type PageRow, type TemplateRow } from "./api";
 
 const NAV: AppNavItem[] = [
   { id: "overview", label: "Overview", href: "/", home: true },
@@ -61,7 +61,7 @@ export function App() {
         </h1>
         <p className="mt-1 text-sm text-muted">
           {selected
-            ? "Clicks by row over the last 30 days, busiest first."
+            ? "Build the page on the left; the preview is the page itself."
             : view === "templates"
               ? "Every look a page can wear. Download one as markdown to edit it."
               : "Every page you run, stalest first."}
@@ -72,7 +72,7 @@ export function App() {
         )}
 
         {selected ? (
-          <PageDetail page={selected} onBack={() => setSelected(null)} />
+          <PageEditor page={selected} onBack={() => setSelected(null)} onChanged={load} />
         ) : view === "templates" ? (
           <Templates />
         ) : (
@@ -87,12 +87,13 @@ export function App() {
             <section className="card mt-6">
               <header className="flex items-center justify-between px-5 py-4">
                 <h2 className="text-[1.0625rem] font-semibold">Pages</h2>
+                <NewPage onCreated={load} onOpen={setSelected} />
               </header>
               {loading ? (
                 <p className="px-5 pb-5 text-sm text-muted">Loading.</p>
               ) : rows.length === 0 ? (
                 <p className="px-5 pb-5 text-sm text-muted">
-                  No pages yet. Ask your agent to create one, or add it from the API.
+                  No pages yet. Add the first one, or ask your agent to.
                 </p>
               ) : (
                 <ul>
@@ -125,28 +126,21 @@ export function App() {
   );
 }
 
-function PageDetail({ page, onBack }: { page: PageRow; onBack: () => void }) {
+function PageStats({ pageId }: { pageId: string }) {
   const [stats, setStats] = useState<BlockStat[]>([]);
   const [total, setTotal] = useState(0);
   const [checking, setChecking] = useState(false);
 
   useEffect(() => {
-    void api.pageStats(page.id).then((d) => {
+    void api.pageStats(pageId).then((d) => {
       setStats(d.items);
       setTotal(d.total_clicks_30d);
     });
-  }, [page.id]);
+  }, [pageId]);
 
   return (
     <>
-      <div className="mt-6 flex items-center gap-3">
-        <button
-          type="button"
-          onClick={onBack}
-          className="rounded-md px-3 py-1.5 text-sm text-muted hover:bg-sunken"
-        >
-          Back
-        </button>
+      <div className="mt-5 flex items-center gap-3">
         {/* The one ink action on this screen. */}
         <button
           type="button"
@@ -154,8 +148,8 @@ function PageDetail({ page, onBack }: { page: PageRow; onBack: () => void }) {
           onClick={async () => {
             setChecking(true);
             try {
-              await api.checkLinks(page.id);
-              const d = await api.pageStats(page.id);
+              await api.checkLinks(pageId);
+              const d = await api.pageStats(pageId);
               setStats(d.items);
             } finally {
               setChecking(false);
@@ -167,7 +161,7 @@ function PageDetail({ page, onBack }: { page: PageRow; onBack: () => void }) {
         </button>
       </div>
 
-      <section className="card mt-6">
+      <section className="card mt-5">
         <header className="px-5 py-4">
           <h2 className="text-[1.0625rem] font-semibold">Rows by clicks</h2>
         </header>
@@ -371,5 +365,411 @@ function TemplateCard({ template: t, onDelete }: { template: TemplateRow; onDele
         </div>
       </div>
     </article>
+  );
+}
+
+/** The row kinds, in the order the "add" buttons offer them. */
+const KINDS: { kind: BlockKind; label: string; hint: string }[] = [
+  { kind: "link", label: "Link", hint: "A button that goes somewhere and counts the click." },
+  { kind: "header", label: "Header", hint: "A caption that divides the page into sections." },
+  { kind: "embed", label: "Embed", hint: "A video, played in place." },
+  { kind: "email", label: "Email capture", hint: "One field and a button. Addresses land in this app." },
+];
+
+/** `meta` is a JSON string on the wire; the only field in it today is `note`. */
+function readNote(meta: string): string {
+  try {
+    return (JSON.parse(meta) as { note?: string }).note ?? "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * The editor. Rows on the left, the real page on the right.
+ *
+ * Every change is saved as it is made rather than behind a Save button: there
+ * is no draft state to lose, and the preview beside it is the confirmation.
+ */
+function PageEditor({ page: initial, onBack, onChanged }: { page: PageRow; onBack: () => void; onChanged: () => void }) {
+  const [page, setPage] = useState<Page | null>(null);
+  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [templates, setTemplates] = useState<TemplateRow[]>([]);
+  const [tab, setTab] = useState<"build" | "stats">("build");
+  const [error, setError] = useState<string | null>(null);
+  // Bumped after every write so the preview iframe refetches.
+  const [rev, setRev] = useState(0);
+
+  const refresh = useCallback(async () => {
+    const [p, b] = await Promise.all([api.page(initial.id), api.blocks(initial.id)]);
+    setPage(p);
+    setBlocks(b.items);
+    setRev((n) => n + 1);
+    onChanged();
+  }, [initial.id, onChanged]);
+
+  useEffect(() => {
+    void refresh().catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+    void api.templates().then((d) => setTemplates(d.items));
+  }, [refresh]);
+
+  /** Run a write, then reload. Errors surface rather than leaving stale rows. */
+  const write = useCallback(
+    async (fn: () => Promise<unknown>) => {
+      try {
+        await fn();
+        await refresh();
+        setError(null);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    },
+    [refresh],
+  );
+
+  function move(index: number, delta: number) {
+    const next = [...blocks];
+    const target = index + delta;
+    if (target < 0 || target >= next.length) return;
+    [next[index], next[target]] = [next[target], next[index]];
+    setBlocks(next);
+    void write(() => api.reorder(initial.id, next.map((b) => b.id)));
+  }
+
+  const preset = (() => {
+    try {
+      return (JSON.parse(page?.theme ?? "{}") as { preset?: string }).preset ?? "";
+    } catch {
+      return "";
+    }
+  })();
+
+  return (
+    <>
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <button type="button" onClick={onBack} className="h-7 rounded-sm px-3 text-sm text-muted hover:bg-sunken">
+          Back
+        </button>
+        <div className="flex rounded-sm bg-sunken p-0.5">
+          {(["build", "stats"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTab(t)}
+              aria-pressed={tab === t}
+              className={`h-6 rounded-[4px] px-3 text-sm capitalize ${tab === t ? "bg-surface font-medium shadow-[inset_0_0_0_1px_var(--border)]" : "text-muted"}`}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
+
+        <span className="ml-auto flex items-center gap-2">
+          {page && (
+            <>
+              <button
+                type="button"
+                onClick={() => void write(() => api.patchPage(page.id, { published: page.published ? 0 : 1 }))}
+                className="h-7 rounded-sm px-3 text-sm font-medium shadow-[inset_0_0_0_1px_var(--border)] hover:bg-sunken"
+              >
+                {page.published ? "Unpublish" : "Publish"}
+              </button>
+              <a
+                href={`/p/${page.slug}`}
+                target="_blank"
+                rel="noreferrer"
+                className="h-7 rounded-sm bg-primary px-3 text-sm font-medium leading-7 text-on-primary hover:bg-primary-hover"
+              >
+                Open
+              </a>
+            </>
+          )}
+        </span>
+      </div>
+
+      {error && <div className="mt-4 rounded-lg bg-danger-tint px-4 py-3 text-sm text-danger">{error}</div>}
+
+      {tab === "stats" ? (
+        <PageStats pageId={initial.id} />
+      ) : (
+        <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="min-w-0">
+            {page && (
+              <section className="card p-5">
+                <h2 className="text-[1.0625rem] font-semibold">This page</h2>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <Field
+                    label="Title"
+                    value={page.title}
+                    onCommit={(v) => v !== page.title && void write(() => api.patchPage(page.id, { title: v }))}
+                  />
+                  <Field
+                    label="Subtitle"
+                    value={page.subtitle}
+                    onCommit={(v) => v !== page.subtitle && void write(() => api.patchPage(page.id, { subtitle: v }))}
+                  />
+                  <label className="block text-sm">
+                    <span className="text-muted">Template</span>
+                    <select
+                      value={preset}
+                      onChange={(e) =>
+                        void write(() => api.patchPage(page.id, { theme: JSON.stringify({ preset: e.currentTarget.value }) }))
+                      }
+                      className="mt-1 h-8 w-full rounded-sm bg-surface px-2 text-sm shadow-[inset_0_0_0_1px_var(--border)]"
+                    >
+                      <option value="">Default</option>
+                      {templates.map((t) => (
+                        <option key={t.slug} value={t.slug}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="text-sm">
+                    <span className="text-muted">Address</span>
+                    <p className="mt-1 flex h-8 items-center font-mono text-xs text-faint">/p/{page.slug}</p>
+                  </div>
+                </div>
+              </section>
+            )}
+
+            <section className="card mt-5">
+              <header className="flex items-center justify-between px-5 py-4">
+                <h2 className="text-[1.0625rem] font-semibold">Rows</h2>
+                <span className="text-sm text-muted">{blocks.length}</span>
+              </header>
+
+              {blocks.length === 0 ? (
+                <p className="px-5 pb-5 text-sm text-muted">
+                  Nothing on the page yet. Add the first row below.
+                </p>
+              ) : (
+                <ul>
+                  {blocks.map((b, i) => (
+                    <BlockRow
+                      key={b.id}
+                      block={b}
+                      first={i === 0}
+                      last={i === blocks.length - 1}
+                      onMove={(d) => move(i, d)}
+                      onPatch={(body) => void write(() => api.patchBlock(b.id, body))}
+                      onDelete={() => void write(() => api.deleteBlock(b.id))}
+                    />
+                  ))}
+                </ul>
+              )}
+
+              <div className="flex flex-wrap gap-2 border-t border-border px-5 py-4">
+                {KINDS.map((k) => (
+                  <button
+                    key={k.kind}
+                    type="button"
+                    title={k.hint}
+                    onClick={() =>
+                      void write(() =>
+                        api.addBlock(initial.id, {
+                          kind: k.kind,
+                          label: k.kind === "header" ? "Section" : k.kind === "email" ? "Get the newsletter" : "New row",
+                          // A link and an embed are refused without one, and a
+                          // placeholder is easier to replace than an error.
+                          url: k.kind === "link" || k.kind === "embed" ? "https://example.com" : undefined,
+                        }),
+                      )
+                    }
+                    className="h-7 rounded-sm px-3 text-sm font-medium shadow-[inset_0_0_0_1px_var(--border)] hover:bg-sunken"
+                  >
+                    Add {k.label.toLowerCase()}
+                  </button>
+                ))}
+              </div>
+            </section>
+          </div>
+
+          {/* The page itself, at the width most of its visitors use. */}
+          <aside className="lg:sticky lg:top-8 lg:self-start">
+            <div className="card overflow-hidden">
+              <header className="flex items-center justify-between px-4 py-3">
+                <h2 className="text-sm font-semibold">Preview</h2>
+                <span className="text-xs text-faint">{page?.published ? "Live" : "Draft"}</span>
+              </header>
+              <iframe
+                key={rev}
+                src={`/api/pages/${initial.id}/preview`}
+                title="Page preview"
+                className="block w-full border-0 border-t border-border bg-sunken"
+                style={{ height: 620 }}
+              />
+            </div>
+          </aside>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** A text input that saves when you leave it or press Enter, never per keystroke. */
+function Field({ label, value, onCommit, mono }: { label: string; value: string; onCommit: (v: string) => void; mono?: boolean }) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => setDraft(value), [value]);
+
+  return (
+    <label className="block text-sm">
+      <span className="text-muted">{label}</span>
+      <input
+        value={draft}
+        onChange={(e) => setDraft(e.currentTarget.value)}
+        onBlur={() => onCommit(draft)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") setDraft(value);
+        }}
+        className={`mt-1 h-8 w-full rounded-sm bg-surface px-2 text-sm shadow-[inset_0_0_0_1px_var(--border)] focus-visible:outline-2 focus-visible:outline-ring ${mono ? "font-mono text-xs" : ""}`}
+      />
+    </label>
+  );
+}
+
+function BlockRow({
+  block,
+  first,
+  last,
+  onMove,
+  onPatch,
+  onDelete,
+}: {
+  block: Block;
+  first: boolean;
+  last: boolean;
+  onMove: (delta: number) => void;
+  onPatch: (body: Partial<Pick<Block, "label" | "url" | "meta" | "active">>) => void;
+  onDelete: () => void;
+}) {
+  const takesUrl = block.kind === "link" || block.kind === "embed";
+  const takesNote = block.kind === "link";
+
+  return (
+    <li className={`border-t border-border px-5 py-4 ${block.active ? "" : "opacity-55"}`}>
+      <div className="flex items-center gap-2">
+        <Badge>{block.kind}</Badge>
+        <span className="ml-auto flex items-center gap-1">
+          <IconButton label="Move up" disabled={first} onClick={() => onMove(-1)}>↑</IconButton>
+          <IconButton label="Move down" disabled={last} onClick={() => onMove(1)}>↓</IconButton>
+          <button
+            type="button"
+            onClick={() => onPatch({ active: block.active ? 0 : 1 })}
+            className="h-6 rounded-sm px-2 text-xs text-muted hover:bg-sunken"
+          >
+            {block.active ? "Hide" : "Show"}
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            className="h-6 rounded-sm px-2 text-xs text-danger hover:bg-danger-tint"
+          >
+            Delete
+          </button>
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <Field label="Label" value={block.label} onCommit={(v) => v !== block.label && onPatch({ label: v })} />
+        {takesUrl && (
+          <Field label="URL" mono value={block.url} onCommit={(v) => v !== block.url && onPatch({ url: v })} />
+        )}
+        {takesNote && (
+          <Field
+            label="Note"
+            value={readNote(block.meta)}
+            onCommit={(v) => v !== readNote(block.meta) && onPatch({ meta: JSON.stringify(v ? { note: v } : {}) })}
+          />
+        )}
+      </div>
+    </li>
+  );
+}
+
+function IconButton({ label, disabled, onClick, children }: { label: string; disabled: boolean; onClick: () => void; children: string }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className="h-6 w-6 rounded-sm text-sm text-muted hover:bg-sunken disabled:opacity-30"
+    >
+      {children}
+    </button>
+  );
+}
+
+/** Creating a page. One field, because everything else is editable after. */
+function NewPage({ onCreated, onOpen }: { onCreated: () => void; onOpen: (p: PageRow) => void }) {
+  const [open, setOpen] = useState(false);
+  const [title, setTitle] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function create() {
+    setBusy(true);
+    try {
+      const created = await api.createPage({ title: title.trim() });
+      setTitle("");
+      setOpen(false);
+      onCreated();
+      // Straight into the editor: a page with no rows is not a result.
+      onOpen({
+        id: created.id,
+        slug: "",
+        title: title.trim(),
+        hostname: null,
+        published: 0,
+        updated_at: new Date().toISOString(),
+        blocks: 0,
+        broken: 0,
+        clicks_7d: 0,
+        clicks_30d: 0,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="h-7 rounded-sm bg-primary px-3 text-sm font-medium text-on-primary hover:bg-primary-hover"
+      >
+        New page
+      </button>
+    );
+  }
+
+  return (
+    <span className="flex items-center gap-2">
+      <input
+        autoFocus
+        value={title}
+        placeholder="Client name"
+        onChange={(e) => setTitle(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && title.trim()) void create();
+          if (e.key === "Escape") setOpen(false);
+        }}
+        className="h-7 w-44 rounded-sm bg-surface px-2 text-sm shadow-[inset_0_0_0_1px_var(--border)] focus-visible:outline-2 focus-visible:outline-ring"
+      />
+      <button
+        type="button"
+        disabled={busy || !title.trim()}
+        onClick={() => void create()}
+        className="h-7 rounded-sm bg-primary px-3 text-sm font-medium text-on-primary hover:bg-primary-hover disabled:opacity-60"
+      >
+        Create
+      </button>
+      <button type="button" onClick={() => setOpen(false)} className="h-7 rounded-sm px-2 text-sm text-muted hover:bg-sunken">
+        Cancel
+      </button>
+    </span>
   );
 }
