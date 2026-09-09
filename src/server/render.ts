@@ -15,6 +15,8 @@
 // Brand values arrive as CSS custom properties from the page's `theme` column,
 // so a client's colour never becomes a hardcoded value in this file.
 
+import { buttonCss, resolveTheme, type ResolvedTheme } from "./theme.js";
+
 export interface RenderPage {
   id: string;
   slug: string;
@@ -35,13 +37,6 @@ export interface RenderBlock {
   meta: string;
 }
 
-export interface Theme {
-  accent?: string;
-  background?: string;
-  foreground?: string;
-  corner?: string;
-  align?: "center" | "left";
-}
 
 /**
  * HTML-escape. Everything interpolated into the document below goes through
@@ -72,25 +67,6 @@ export function safeUrl(raw: string): string | null {
   }
 }
 
-/** A CSS colour we are willing to inline: hex, rgb()/hsl(), or a bare keyword. */
-function safeColor(raw: unknown, fallback: string): string {
-  if (typeof raw !== "string") return fallback;
-  const v = raw.trim();
-  if (/^#[0-9a-f]{3,8}$/i.test(v)) return v;
-  if (/^(rgb|hsl)a?\([0-9.,%\s/-]+\)$/i.test(v)) return v;
-  if (/^[a-z]{3,20}$/i.test(v)) return v;
-  return fallback;
-}
-
-export function parseTheme(raw: string): Theme {
-  try {
-    const t = JSON.parse(raw) as Theme;
-    return typeof t === "object" && t !== null ? t : {};
-  } catch {
-    return {};
-  }
-}
-
 function embedFrame(url: string): string | null {
   const u = safeUrl(url);
   if (!u) return null;
@@ -115,12 +91,7 @@ function embedFrame(url: string): string | null {
  * and cache headers.
  */
 export function renderPage(page: RenderPage, blocks: RenderBlock[], origin: string): string {
-  const theme = parseTheme(page.theme);
-  const accent = safeColor(theme.accent, "#1b1a19");
-  const background = safeColor(theme.background, "#ffffff");
-  const foreground = safeColor(theme.foreground, "#1b1a19");
-  const corner = /^\d{1,2}px$/.test(String(theme.corner ?? "")) ? String(theme.corner) : "10px";
-  const align = theme.align === "left" ? "left" : "center";
+  const t = resolveTheme(page.theme);
 
   const canonical = page.hostname
     ? `https://${page.hostname}/p/${encodeURIComponent(page.slug)}`
@@ -158,43 +129,7 @@ export function renderPage(page: RenderPage, blocks: RenderBlock[], origin: stri
 <meta property="og:url" content="${escapeHtml(canonical)}">
 <meta name="twitter:card" content="summary">
 <style>
-:root{--accent:${accent};--bg:${background};--fg:${foreground};--corner:${corner}}
-*{box-sizing:border-box}
-html{-webkit-text-size-adjust:100%}
-body{margin:0;background:var(--bg);color:var(--fg);
-  font:400 16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
-  padding:48px 20px calc(48px + env(safe-area-inset-bottom));
-  display:flex;justify-content:center}
-main{width:100%;max-width:34rem;text-align:${align}}
-.avatar{border-radius:50%;object-fit:cover;margin:0 0 18px}
-h1{font-size:1.375rem;font-weight:600;letter-spacing:-.01em;margin:0 0 6px}
-.subtitle{margin:0 0 28px;opacity:.65;font-size:.9375rem}
-ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
-a.link{display:block;padding:15px 18px;border-radius:var(--corner);text-align:${align};
-  border:1px solid color-mix(in oklab,var(--fg) 16%,transparent);
-  color:inherit;text-decoration:none;font-weight:500;font-size:.9375rem;
-  transition:border-color .12s ease,transform .12s ease}
-a.link:hover{border-color:var(--accent)}
-a.link:active{transform:translateY(1px)}
-a.link:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.note{display:block;font-weight:400;opacity:.6;font-size:.8125rem;margin-top:3px}
-h2{font-size:.8125rem;font-weight:600;letter-spacing:.02em;opacity:.55;
-  margin:20px 0 -2px;text-transform:none}
-.embed{position:relative;padding-top:56.25%;border-radius:var(--corner);overflow:hidden;
-  border:1px solid color-mix(in oklab,var(--fg) 16%,transparent)}
-.embed iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
-form{display:flex;gap:8px;flex-wrap:wrap}
-input[type=email]{flex:1 1 12rem;padding:14px 16px;border-radius:var(--corner);font:inherit;
-  color:inherit;background:transparent;
-  border:1px solid color-mix(in oklab,var(--fg) 16%,transparent)}
-input[type=email]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-button{padding:14px 20px;border-radius:var(--corner);border:0;background:var(--accent);
-  color:#fff;font:inherit;font-weight:500;cursor:pointer}
-button:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
-.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-footer{margin-top:40px;font-size:.8125rem;opacity:.5}
-footer a{color:inherit}
-@media (prefers-reduced-motion:reduce){a.link{transition:none}}
+${styleSheet(t)}
 </style>
 </head>
 <body>
@@ -244,4 +179,51 @@ function renderBlock(b: RenderBlock, origin: string): string {
   void origin;
   if (!safeUrl(b.url)) return "";
   return `<li><a class="link" href="/r/${escapeHtml(b.id)}" rel="noopener">${label}${note}</a></li>`;
+}
+
+/**
+ * The page's whole stylesheet, built from the resolved theme. It is inlined in
+ * the document rather than served as a file, which is what removes the second
+ * request from the critical path.
+ */
+function styleSheet(t: ResolvedTheme): string {
+  const canvas = t.background2
+    ? `linear-gradient(${t.angle}deg,${t.background},${t.background2})`
+    : t.background;
+
+  return `*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:${canvas};background-attachment:fixed;color:${t.foreground};
+  font:400 16px/1.5 ${t.font};
+  padding:48px 20px calc(48px + env(safe-area-inset-bottom));
+  display:flex;justify-content:center}
+main{width:100%;max-width:34rem;text-align:${t.align}}
+.avatar{border-radius:${t.avatarRadius};object-fit:cover;margin:0 0 18px;
+  ${t.align === "left" ? "" : "display:block;margin-left:auto;margin-right:auto"}}
+h1{font-family:${t.headingFont};font-size:1.5rem;font-weight:600;
+  letter-spacing:${t.letterSpacing};text-transform:${t.textTransform};margin:0 0 6px}
+.subtitle{margin:0 0 28px;opacity:.8;font-size:.9375rem}
+ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
+${buttonCss(t)}
+a.link:focus-visible{outline:2px solid ${t.accent};outline-offset:3px}
+.note{display:block;font-weight:400;opacity:.78;font-size:.8125rem;margin-top:3px}
+h2{font-family:${t.headingFont};font-size:.8125rem;font-weight:600;letter-spacing:.04em;
+  text-transform:uppercase;opacity:.55;margin:22px 0 -2px}
+.embed{position:relative;padding-top:56.25%;border-radius:${t.corner};overflow:hidden;
+  border:1px solid color-mix(in oklab,${t.foreground} 22%,transparent)}
+.embed iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+form{display:flex;gap:8px;flex-wrap:wrap}
+input[type=email]{flex:1 1 12rem;padding:14px 16px;border-radius:${t.corner};font:inherit;
+  color:inherit;background:color-mix(in oklab,${t.foreground} 6%,transparent);
+  border:1px solid color-mix(in oklab,${t.foreground} 22%,transparent)}
+input[type=email]::placeholder{color:inherit;opacity:.55}
+input[type=email]:focus-visible{outline:2px solid ${t.accent};outline-offset:2px}
+button{padding:14px 20px;border-radius:${t.corner};border:0;background:${t.accent};
+  color:${t.onAccent};font:inherit;font-weight:500;cursor:pointer}
+button:focus-visible{outline:2px solid ${t.foreground};outline-offset:2px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+footer{margin-top:44px;font-size:.8125rem;opacity:.75}
+footer a{color:inherit}
+@media (prefers-reduced-motion:reduce){a.link{transition:none}
+a.link:hover,a.link:active{transform:none}}`;
 }

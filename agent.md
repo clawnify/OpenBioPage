@@ -67,10 +67,19 @@ Full shapes are in `/llms.txt`; these are the ones you write most.
   `kind` is `link`, `header`, `embed` or `email`. `link` and `embed` need a
   `url`. `meta` is JSON and today carries one field: `{ "note": "..." }`, a
   muted second line.
-- `PATCH /api/pages/{id}` — `theme` is a JSON string:
-  `{ accent, background, foreground, corner, align }`. These become CSS custom
-  properties on the public page, which is why a client's brand colour never has
-  to be hardcoded anywhere.
+- `PATCH /api/pages/{id}` — `theme` is a JSON string. **Name a preset first**
+  and override from there: `{"preset":"paper","accent":"#7a5c3e"}`. The presets
+  are `mono`, `ink`, `paper`, `sunset`, `brutal`, `slate`, `candy`, `forest`,
+  and each one is a whole look, not a palette. Overridable fields are
+  `background`, `background2` (a second stop makes it a gradient), `angle`,
+  `foreground`, `accent`, `font` (`sans`/`serif`/`mono`/`rounded`/`condensed`),
+  `button` (`fill`/`outline`/`soft`/`shadow`), `corner`
+  (`sharp`/`round`/`pill`), `avatar` (`circle`/`rounded`/`square`) and `align`.
+
+  Two things you do not control: button text colour is computed from the accent
+  so it stays readable, and a colour the app cannot parse is ignored rather than
+  inlined. If a brand colour comes out looking wrong, it was refused, not lost:
+  send a hex.
 - `PUT /api/settings` — the default footer credit for pages created from here on.
   It does not rewrite pages that already exist.
 

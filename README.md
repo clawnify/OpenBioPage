@@ -20,9 +20,15 @@ around it:
   font, no external stylesheet, no beacon. It renders on the first paint in an
   in-app browser on a bad connection, which is where link pages are actually
   opened.
-- **Your brand, per page, as tokens.** Colour, corner radius and alignment come
-  from the page's own theme, so a client's brand is never a hardcoded value in a
-  component.
+- **Eight presets, then your brand on top.** `mono`, `ink`, `paper`, `sunset`,
+  `brutal`, `slate`, `candy`, `forest`: each one is a whole look, with its own
+  typeface, button style, corner and canvas. A page names one and overrides what
+  it wants. None of them costs a network request, because the type is a system
+  stack and the gradients are CSS.
+- **Contrast is not left to taste.** Button text colour is computed from the
+  accent, and every preset is tested against WCAG AA for body text, subtitle and
+  button label. The first `sunset` looked lovely and measured 2.32:1; the test
+  is why it is not shipping.
 
 ## What is here
 
