@@ -484,8 +484,10 @@ const KINDS: { kind: BlockKind; label: string; hint: string }[] = [
         {panel === "design" ? (
           <Design
             preset={preset}
+            theme={page?.theme ?? "{}"}
             templates={templates}
-            onPick={(slug) => page && void write(() => api.patchPage(page.id, { theme: JSON.stringify(slug ? { preset: slug } : {}) }))}
+            onPick={(slug) => page && void write(() => api.patchPage(page.id, { theme: mergeTheme(page.theme, { preset: slug }) }))}
+            onTheme={(patch) => page && void write(() => api.patchPage(page.id, { theme: mergeTheme(page.theme, patch) }))}
           />
         ) : (
           <>
@@ -607,14 +609,60 @@ function Profile({ page, onPatch }: { page: Page; onPatch: (b: Partial<Page>) =>
  */
 function Design({
   preset,
+  theme,
   templates,
   onPick,
+  onTheme,
 }: {
   preset: string;
+  theme: string;
   templates: TemplateRow[];
   onPick: (slug: string) => void;
+  onTheme: (patch: Record<string, unknown>) => void;
 }) {
+  let current: Record<string, unknown> = {};
+  try {
+    current = JSON.parse(theme || "{}") as Record<string, unknown>;
+  } catch {
+    // An unreadable theme still renders the picker; picking one replaces it.
+  }
+  const image = typeof current.image === "string" ? current.image : "";
+
   return (
+    <>
+    <section className="card mt-4 p-5">
+      <h2 className="text-[1.0625rem] font-semibold">Header</h2>
+      <p className="mt-1 text-sm text-muted">
+        A photograph behind the name, or a round avatar above it.
+      </p>
+      <div className="mt-4 flex flex-wrap items-center gap-3">
+        <ImagePicker
+          value={image}
+          onPick={(key) => onTheme({ image: key, header: key ? "hero" : "classic" })}
+        />
+        {image && (
+          <label className="text-sm">
+            <span className="text-muted">Darken</span>
+            <input
+              type="range"
+              min={0}
+              max={92}
+              defaultValue={Math.round(Number(current.overlay ?? 0.6) * 100)}
+              onChange={(e) => onTheme({ overlay: Number(e.currentTarget.value) / 100 })}
+              className="ml-2 align-middle"
+              aria-label="Darken the image behind the text"
+            />
+          </label>
+        )}
+      </div>
+      {image && (
+        <p className="mt-2 text-xs text-faint">
+          The page will not let this get lighter than the text needs. A photo cannot be
+          contrast-checked, so the darkening is what keeps the words readable on the next one.
+        </p>
+      )}
+    </section>
+
     <section className="card mt-4 p-5">
       <h2 className="text-[1.0625rem] font-semibold">Template</h2>
       <p className="mt-1 text-sm text-muted">
@@ -636,6 +684,52 @@ function Design({
         ))}
       </ul>
     </section>
+    </>
+  );
+}
+
+/** Choose, replace or clear the image a hero header is built on. */
+function ImagePicker({ value, onPick }: { value: string; onPick: (key: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <span className="flex items-center gap-3">
+      {value ? (
+        <img src={`/m/${value}`} alt="" className="h-14 w-14 rounded-md object-cover" />
+      ) : (
+        <span aria-hidden className="grid h-14 w-14 place-items-center rounded-md bg-sunken text-xs text-faint">
+          none
+        </span>
+      )}
+      <label className="h-8 cursor-pointer rounded-md px-3 text-sm font-medium leading-8 shadow-[inset_0_0_0_1px_var(--border)] hover:bg-sunken">
+        {busy ? "Uploading." : value ? "Replace" : "Upload"}
+        <input
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          onChange={async (e) => {
+            const file = e.currentTarget.files?.[0];
+            if (!file) return;
+            setBusy(true);
+            setError(null);
+            try {
+              onPick((await api.upload(file)).key);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : String(err));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      </label>
+      {value && (
+        <button type="button" onClick={() => onPick("")} className="h-8 rounded-md px-2 text-sm text-muted hover:bg-sunken">
+          Remove
+        </button>
+      )}
+      {error && <span className="text-xs text-danger">{error}</span>}
+    </span>
   );
 }
 
@@ -644,6 +738,15 @@ function Design({
  * them. Small enough to be honest — it claims to show the palette and the
  * button treatment, and it shows exactly those.
  */
+/** The same stacks the renderer uses, so a swatch shows the real face. */
+const FACES: Record<string, string> = {
+  sans: `-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif`,
+  serif: `"Iowan Old Style","Palatino Linotype",Palatino,Georgia,"Times New Roman",serif`,
+  mono: `ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace`,
+  rounded: `ui-rounded,"SF Pro Rounded","Hiragino Maru Gothic ProN",Quicksand,Verdana,sans-serif`,
+  condensed: `"Haettenschweiler","Arial Narrow Bold","Helvetica Neue Condensed",Impact,sans-serif`,
+};
+
 function Swatch({ theme }: { theme: string }) {
   let t: Record<string, string> = {};
   try {
@@ -666,12 +769,36 @@ function Swatch({ theme }: { theme: string }) {
         : { border: `1px solid ${fg}59`, borderRadius: radius };
 
   return (
-    <span className="block px-3 py-3.5" style={{ background: canvas }}>
-      <span className="mx-auto mb-2 block h-3 w-8 rounded-full" style={{ background: fg, opacity: 0.85 }} />
+    <span className="block px-3 py-3" style={{ background: canvas }}>
+      {/* "Aa" in the template's own typeface: the face is half of what makes
+          one template different from another, and a coloured blob hides it. */}
+      <span
+        className="mb-1.5 block text-center text-[1.375rem] leading-none"
+        style={{ color: fg, fontFamily: FACES[t.font ?? "sans"] ?? FACES.sans }}
+      >
+        Aa
+      </span>
       <span className="block h-4" style={pill(true)} />
       <span className="mt-1.5 block h-4" style={pill(false)} />
     </span>
   );
+}
+
+/**
+ * Merge into the page's theme instead of replacing it. Picking a template must
+ * not silently drop the photograph someone uploaded, and vice versa. An empty
+ * value clears its key rather than storing `""`.
+ */
+function mergeTheme(theme: string, patch: Record<string, unknown>): string {
+  let base: Record<string, unknown> = {};
+  try {
+    base = JSON.parse(theme || "{}") as Record<string, unknown>;
+  } catch {
+    // An unreadable theme is replaced by this edit rather than blocking it.
+  }
+  const next = { ...base, ...patch };
+  for (const [k, v] of Object.entries(next)) if (v === "" || v == null) delete next[k];
+  return JSON.stringify(next);
 }
 
 /** `meta` is a JSON string on the wire; the only field in it today is `note`. */

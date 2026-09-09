@@ -19,6 +19,12 @@ export type AvatarShape = "circle" | "rounded" | "square";
 
 export interface Theme {
   preset?: string;
+  /** `hero` puts the image full-bleed behind the header; `classic` is a round avatar. */
+  header?: "classic" | "hero";
+  /** R2 key of the background image, served from /m/. */
+  image?: string;
+  /** Scrim opacity over the image. Raised to the legible floor, never lowered. */
+  overlay?: number;
   background?: string;
   background2?: string;
   /** Gradient angle in degrees. Ignored unless background2 is set. */
@@ -34,6 +40,10 @@ export interface Theme {
 
 /** Resolved, every field present, every value already validated. */
 export interface ResolvedTheme {
+  header: "classic" | "hero";
+  image: string | null;
+  overlay: number;
+  scrim: string;
   background: string;
   background2: string | null;
   angle: number;
@@ -85,6 +95,59 @@ const FONTS: Record<FontKey, { body: string; heading: string; tracking: string; 
     transform: "uppercase",
   },
 };
+
+/** Relative luminance of a hex colour, or null if it is not measurable. */
+function luminance(hex: string): number | null {
+  const m = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return null;
+  const full = m[1].length === 3 ? m[1].split("").map((ch) => ch + ch).join("") : m[1];
+  const channel = (i: number) => {
+    const v = parseInt(full.slice(i * 2, i * 2 + 2), 16) / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  return 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2);
+}
+
+/** The 0-255 grey with this relative luminance. */
+function greyFor(target: number): number {
+  const clamped = Math.max(0, Math.min(1, target));
+  return 255 * (clamped <= 0.0031308 ? clamped * 12.92 : 1.055 * clamped ** (1 / 2.4) - 0.055);
+}
+
+/**
+ * The scrim opacity below which text stops being guaranteed legible on an
+ * image, computed from the text colour rather than pinned to a constant.
+ *
+ * A photograph cannot be contrast-checked: the next upload may be a white sky
+ * where the last was a dark wall. So the guarantee has to come from the layer
+ * we control. This solves for the alpha at which the *worst possible pixel* —
+ * pure white under light text, pure black under dark — still clears 4.5:1.
+ *
+ * It is a function and not the two constants it replaces because those were
+ * solved for pure white and pure black, and the first preset to use a near-white
+ * foreground (`ink`, at #f4f3f1) came out at 4.04:1 and passed the check anyway.
+ * An author may go darker than this. Lighter is refused, because the page would
+ * look right on the photo they tested and fail on the one they upload next.
+ */
+export function scrimFloor(foreground: string): number {
+  const lum = luminance(foreground);
+  // An unmeasurable colour gets the most cautious answer rather than a guess.
+  if (lum === null) return 0.6;
+
+  // Solved against 4.6 rather than 4.5: the composited channel is rounded to a
+  // whole byte before it is painted, and an exact solve lands a thousandth
+  // under the line as often as over it.
+  const TARGET = 4.6;
+
+  if (lum > 0.35) {
+    // Light text, black scrim: hold the background *below* a ceiling.
+    const ceiling = (lum + 0.05) / TARGET - 0.05;
+    return Math.min(0.92, Math.max(0, 1 - greyFor(ceiling) / 255));
+  }
+  // Dark text, white scrim: hold the background *above* a floor.
+  const needed = TARGET * (lum + 0.05) - 0.05;
+  return Math.min(0.92, Math.max(0, greyFor(needed) / 255));
+}
 
 const CORNERS: Record<Corner, string> = { sharp: "0px", round: "12px", pill: "999px" };
 const AVATARS: Record<AvatarShape, string> = { circle: "50%", rounded: "22%", square: "0" };
@@ -282,11 +345,22 @@ export function resolveTheme(raw: string, custom?: Theme | null): ResolvedTheme 
   const accent = safeColor(t.accent) ?? "#1b1a19";
   const background2 = safeColor(t.background2);
 
+  // A light foreground wants a dark scrim, and the reverse. Which one decides
+  // both the colour and the floor.
+  const foreground = safeColor(t.foreground) ?? "#1b1a19";
+  const lightText = readableOn(foreground) === "#111111";
+  const floor = scrimFloor(foreground);
+  const image = typeof t.image === "string" && /^[\w./-]{1,200}$/.test(t.image) ? t.image : null;
+
   return {
+    header: t.header === "hero" && image ? "hero" : "classic",
+    image,
+    overlay: Math.min(0.92, Math.max(floor, Number.isFinite(t.overlay) ? Number(t.overlay) : floor)),
+    scrim: lightText ? "0,0,0" : "255,255,255",
     background: safeColor(t.background) ?? "#ffffff",
     background2,
     angle: Number.isFinite(t.angle) ? Math.max(0, Math.min(360, Number(t.angle))) : 160,
-    foreground: safeColor(t.foreground) ?? "#1b1a19",
+    foreground,
     accent,
     onAccent: readableOn(accent),
     font: font.body,

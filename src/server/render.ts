@@ -140,9 +140,17 @@ ${styleSheet(t)}
 </head>
 <body>
 <main>
-${avatar}
-<h1>${escapeHtml(page.title)}</h1>
-${page.subtitle ? `<p class="subtitle">${escapeHtml(page.subtitle)}</p>` : ""}
+${
+  // In hero the image is already the canvas, so a second copy of it as a round
+  // avatar would be the same picture twice.
+  t.header === "hero"
+    ? `<header class="hero"><h1>${escapeHtml(page.title)}</h1>${
+        page.subtitle ? `<p class="subtitle">${escapeHtml(page.subtitle)}</p>` : ""
+      }</header>`
+    : `${avatar}<h1>${escapeHtml(page.title)}</h1>${
+        page.subtitle ? `<p class="subtitle">${escapeHtml(page.subtitle)}</p>` : ""
+      }`
+}
 <ul>
 ${rows}
 </ul>
@@ -193,9 +201,15 @@ function renderBlock(b: RenderBlock, origin: string): string {
  * request from the critical path.
  */
 function styleSheet(t: ResolvedTheme): string {
-  const canvas = t.background2
-    ? `linear-gradient(${t.angle}deg,${t.background},${t.background2})`
-    : t.background;
+  // With an image, the scrim is painted as a gradient layer *over* it in the
+  // same property, so there is no separate element to get out of sync and the
+  // guarantee travels with the background rather than beside it.
+  const canvas = t.image
+    ? `linear-gradient(rgba(${t.scrim},${t.overlay}),rgba(${t.scrim},${t.overlay})),` +
+      `url("/m/${encodeURIComponent(t.image)}") center/cover no-repeat fixed`
+    : t.background2
+      ? `linear-gradient(${t.angle}deg,${t.background},${t.background2})`
+      : t.background;
 
   return `*{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -206,7 +220,11 @@ body{margin:0;background:${canvas};background-attachment:fixed;color:${t.foregro
 main{width:100%;max-width:34rem;text-align:${t.align}}
 .avatar{border-radius:${t.avatarRadius};object-fit:cover;margin:0 0 18px;
   ${t.align === "left" ? "" : "display:block;margin-left:auto;margin-right:auto"}}
-h1{font-family:${t.headingFont};font-size:1.5rem;font-weight:600;
+${t.header === "hero" ? `body{padding-top:0}
+main{padding-top:0}
+.hero{margin:0 -20px 26px;padding:96px 20px 30px;text-align:${t.align}}
+.hero h1{margin-bottom:4px}` : ""}
+h1{font-family:${t.headingFont};font-size:${t.header === "hero" ? "1.875rem" : "1.5rem"};font-weight:600;
   letter-spacing:${t.letterSpacing};text-transform:${t.textTransform};margin:0 0 6px}
 .subtitle{margin:0 0 28px;opacity:.8;font-size:.9375rem}
 ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}

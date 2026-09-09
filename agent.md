@@ -81,6 +81,21 @@ Full shapes are in `/llms.txt`; these are the ones you write most.
   inlined. If a brand colour comes out looking wrong, it was refused, not lost:
   send a hex.
 
+### Putting a photograph behind a page
+
+`POST /api/uploads` with the image as the raw body and its real `Content-Type`
+(JPEG, PNG, WebP, AVIF or GIF, up to 5 MB) returns a `key`. Then set the page's
+theme to `{"header":"hero","image":"<key>"}` and the photo becomes the canvas
+with the name over it.
+
+**You do not control how dark it gets.** A photograph cannot be contrast-checked
+— the next upload is a white sky where the last was a dark wall — so the app
+computes the scrim opacity that keeps the text above 4.5:1 against the worst
+pixel the image could contain, and refuses anything lighter. `overlay` can go
+darker than that and never lighter. If a client asks why their photo looks
+muted, that is the reason, and the answer is a darker photo rather than a
+thinner scrim.
+
 ### Writing a template
 
 A look you will reuse belongs in a template rather than repeated on every page.

@@ -3,7 +3,7 @@
 // `sunset` looked good in a screenshot and measured 2.32:1.
 
 import { describe, expect, it } from "vitest";
-import { PRESETS, readableOn, resolveTheme } from "./theme.js";
+import { PRESETS, readableOn, resolveTheme, scrimFloor } from "./theme.js";
 
 function luminance(hex: string): number {
   const f = hex.replace("#", "");
@@ -74,5 +74,46 @@ describe("theme resolution", () => {
   it("picks the readable text colour for an accent, not a fixed one", () => {
     expect(readableOn("#fdf35e")).toBe("#111111");
     expect(readableOn("#101010")).toBe("#ffffff");
+  });
+});
+
+describe("a photograph as the canvas", () => {
+  /** Text at `alpha` scrim over the worst pixel a photo could supply. */
+  function overWorstPixel(text: string, scrim: string, alpha: number, pixel: number): number {
+    const s = scrim === "0,0,0" ? 0 : 255;
+    const composited = Math.round(s * alpha + pixel * (1 - alpha));
+    const hex = "#" + [composited, composited, composited].map((n) => n.toString(16).padStart(2, "0")).join("");
+    return contrast(text, hex);
+  }
+
+  it("stays legible over a pure white photo and a pure black one", () => {
+    for (const name of Object.keys(PRESETS)) {
+      const t = resolveTheme(JSON.stringify({ preset: name, header: "hero", image: "x.jpg" }));
+      for (const pixel of [0, 255]) {
+        const ratio = overWorstPixel(t.foreground, t.scrim, t.overlay, pixel);
+        expect(ratio, `${name} over a ${pixel === 0 ? "black" : "white"} photo`).toBeGreaterThanOrEqual(AA);
+      }
+    }
+  });
+
+  it("refuses a scrim lighter than the floor, however the author asks", () => {
+    // The page would look fine on the photo they tested and fail on the next.
+    const t = resolveTheme(JSON.stringify({ preset: "ink", header: "hero", image: "x.jpg", overlay: 0 }));
+    expect(t.overlay).toBeGreaterThanOrEqual(scrimFloor(t.foreground));
+  });
+
+  it("lets an author go darker than the floor", () => {
+    const t = resolveTheme(JSON.stringify({ preset: "ink", header: "hero", image: "x.jpg", overlay: 0.8 }));
+    expect(t.overlay).toBeCloseTo(0.8);
+  });
+
+  it("ignores a key that is not a key, so nothing is interpolated into the css", () => {
+    const t = resolveTheme(JSON.stringify({ header: "hero", image: 'x.jpg");evil:1;a:url("' }));
+    expect(t.image).toBeNull();
+    expect(t.header).toBe("classic");
+  });
+
+  it("falls back to the classic header when there is no image to be a hero of", () => {
+    expect(resolveTheme(JSON.stringify({ preset: "paper", header: "hero" })).header).toBe("classic");
   });
 });
