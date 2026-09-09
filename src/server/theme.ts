@@ -376,7 +376,13 @@ export function resolveTheme(raw: string, custom?: Theme | null): ResolvedTheme 
 
 /** The button rules, which is where a preset is most visible. */
 export function buttonCss(t: ResolvedTheme): string {
-  const shared = `display:block;padding:15px 18px;border-radius:${t.corner};text-align:${t.align};
+  // Every row is the same box. A note or a thumbnail changes what is inside it,
+  // never how tall it is: a list of buttons at three different heights reads as
+  // a rendering fault rather than as emphasis, and nobody meant the row with a
+  // note to be the important one.
+  const shared = `display:flex;align-items:center;box-sizing:border-box;
+  justify-content:${t.align === "left" ? "flex-start" : "center"};
+  min-height:72px;padding:10px 18px;border-radius:${t.corner};text-align:${t.align};
   color:inherit;text-decoration:none;font-weight:500;font-size:.9375rem;
   transition:transform .12s ease,box-shadow .12s ease,background-color .12s ease,border-color .12s ease`;
 

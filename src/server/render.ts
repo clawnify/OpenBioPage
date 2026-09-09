@@ -238,10 +238,13 @@ ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12p
 ${buttonCss(t)}
 a.link:focus-visible{outline:2px solid ${t.accent};outline-offset:3px}
 a.link{position:relative}
-.thumb{position:absolute;left:8px;top:50%;transform:translateY(-50%);
+.thumb{position:absolute;left:12px;top:50%;transform:translateY(-50%);
   width:40px;height:40px;border-radius:calc(${t.corner} - 6px);object-fit:cover}
-a.link.has-thumb{padding-left:58px;padding-right:58px}
-.note{display:block;font-weight:400;opacity:.78;font-size:.8125rem;margin-top:3px}
+/* Reserved on both sides, so a centred label stays centred in the row rather
+   than being pushed off by the picture. */
+a.link.has-thumb{padding-left:62px;padding-right:62px}
+.label{line-height:1.35}
+.note{display:block;font-weight:400;opacity:.78;font-size:.8125rem;line-height:1.35;margin-top:2px}
 h2{font-family:${t.headingFont};font-size:.8125rem;font-weight:600;letter-spacing:.04em;
   text-transform:uppercase;opacity:.55;margin:22px 0 -2px}
 .embed{position:relative;padding-top:56.25%;border-radius:${t.corner};overflow:hidden;
