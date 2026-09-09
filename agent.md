@@ -81,6 +81,18 @@ Full shapes are in `/llms.txt`; these are the ones you write most.
   inlined. If a brand colour comes out looking wrong, it was refused, not lost:
   send a hex.
 
+### The socials row
+
+A `socials` block is one row of platform marks. Its `meta` is
+`{"items":[{"p":"instagram","url":"https://…"}]}`, and `p` must be one of
+`instagram`, `youtube`, `x`, `facebook`, `linkedin`, `spotify`, `whatsapp`,
+`email`, `website` — anything else is dropped rather than drawn.
+
+Each mark goes through the counting redirect as `/r/{block}/{p}`, so a tap on a
+social is recorded like any other click, with the platform in the click's
+`target`. Removing a platform means clearing its address; there is no separate
+delete.
+
 ### Adding a link
 
 `GET /api/link-meta?url=` reads the destination's own `og:title`,

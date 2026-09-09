@@ -410,7 +410,25 @@ const KINDS: { kind: BlockKind; label: string; hint: string }[] = [
   { kind: "header", label: "Header", hint: "A caption that divides the page into sections." },
   { kind: "embed", label: "Embed", hint: "A video, played in place." },
   { kind: "email", label: "Email capture", hint: "One field and a button. Addresses land in this app." },
+  { kind: "socials", label: "Socials", hint: "A row of platform marks. Each one still counts its own taps." },
 ];
+
+/** The platforms the page can draw. Keep in step with `src/server/socials.ts`. */
+const PLATFORMS = [
+  "instagram", "youtube", "x", "facebook", "linkedin",
+  "spotify", "whatsapp", "email", "website",
+] as const;
+
+interface SocialItem { p: string; url: string }
+
+function readSocialItems(meta: string): SocialItem[] {
+  try {
+    const items = (JSON.parse(meta) as { items?: unknown }).items;
+    return Array.isArray(items) ? (items as SocialItem[]).filter((i) => i && typeof i.p === "string") : [];
+  } catch {
+    return [];
+  }
+}
 
 /**
  * The editor. Rows on the left, the real page on the right.
@@ -537,7 +555,14 @@ const KINDS: { kind: BlockKind; label: string; hint: string }[] = [
                     void write(() =>
                       api.addBlock(initial.id, {
                         kind: k.kind,
-                        label: k.kind === "header" ? "Section" : k.kind === "email" ? "Get the newsletter" : "New link",
+                        label:
+                          k.kind === "header"
+                            ? "Section"
+                            : k.kind === "email"
+                              ? "Get the newsletter"
+                              : k.kind === "socials"
+                                ? "Elsewhere"
+                                : "New link",
                         // A link and an embed are refused without one, and a
                         // placeholder is easier to replace than an error.
                         url: k.kind === "link" || k.kind === "embed" ? "https://example.com" : undefined,
@@ -875,6 +900,7 @@ function BlockCard({
 }) {
   const takesUrl = block.kind === "link" || block.kind === "embed";
   const takesNote = block.kind === "link";
+  const isSocials = block.kind === "socials";
   const note = readNote(block.meta);
   const image = readMeta(block.meta).image;
   const [reading, setReading] = useState(false);
@@ -926,6 +952,12 @@ function BlockCard({
               label="URL"
             />
           )}
+          {isSocials && (
+            <SocialsEditor
+              items={readSocialItems(block.meta)}
+              onChange={(items) => onPatch({ meta: JSON.stringify({ items }) })}
+            />
+          )}
           {takesNote && (
             <InlineEdit
               value={note}
@@ -961,6 +993,45 @@ function BlockCard({
         </button>
       </div>
     </li>
+  );
+}
+
+/**
+ * The platforms on a socials row, and where each one points.
+ *
+ * A platform with no address is simply not on the page — that is how one is
+ * removed, so there is no separate delete to find.
+ */
+function SocialsEditor({ items, onChange }: { items: SocialItem[]; onChange: (items: SocialItem[]) => void }) {
+  const byPlatform = new Map(items.map((i) => [i.p, i.url]));
+
+  function set(p: string, url: string) {
+    const next = PLATFORMS.filter((k) => (k === p ? url : byPlatform.get(k)))
+      .map((k) => ({ p: k, url: k === p ? url : (byPlatform.get(k) ?? "") }))
+      .filter((i) => i.url);
+    onChange(next);
+  }
+
+  return (
+    <ul className="mt-2 grid gap-1.5 sm:grid-cols-2">
+      {PLATFORMS.map((p) => {
+        const url = byPlatform.get(p) ?? "";
+        return (
+          <li key={p} className={`flex items-baseline gap-2 ${url ? "" : "opacity-60"}`}>
+            <span className="w-20 shrink-0 text-xs capitalize text-muted">{p}</span>
+            <span className="min-w-0 flex-1">
+              <InlineEdit
+                value={url}
+                placeholder="Not shown"
+                label={`${p} address`}
+                className="font-mono text-xs"
+                onCommit={(v) => v !== url && set(p, v)}
+              />
+            </span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

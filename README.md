@@ -39,6 +39,10 @@ The second thing it buys: the pages tell you when they rot. A checker walks ever
 - **Paste a URL and the row fills itself in.** The destination's own title and image come back from its meta tags — a fetch, not a model call and not a screenshot. The image is copied into this app's own storage, so a page with ten thumbnails still makes zero requests to anyone else, and still tells nobody who is reading it.
 - **Eight templates, then your brand on top.** `mono`, `ink`, `paper`, `sunset`, `brutal`, `slate`, `candy`, `forest` — each a whole look, with its own typeface, button treatment, corner and canvas.
 - **A photograph can be the page.** Upload one and the header becomes a hero: the image full-bleed, the name over it.
+- **A socials row that still counts.** A line of platform marks under the links,
+  each one going through the same counting redirect, so a tap on Instagram is
+  recorded with the platform beside it rather than vanishing into a bare
+  `<a href>`.
 - **Email capture that lands here.** Addresses go into your own table, not a vendor's list.
 
 ## Templates are documents, not dropdowns
@@ -94,6 +98,7 @@ A page is a list of blocks, and `kind` decides how each one renders:
 | `header` | A quiet caption that groups the rows under it |
 | `embed` | An inline player. YouTube and Spotify today |
 | `email` | A signup field that posts to this app |
+| `socials` | A row of platform marks, each counted separately |
 
 ## Local development
 

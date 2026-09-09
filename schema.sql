@@ -71,7 +71,10 @@ CREATE TABLE clicks (
   -- Coarse and deliberately non-identifying: no IP, no user agent string,
   -- no cookie. A referrer host and a country are enough to act on.
   referrer    TEXT NOT NULL DEFAULT '',
-  country     TEXT NOT NULL DEFAULT ''
+  country     TEXT NOT NULL DEFAULT '',
+  -- Which link inside the block was taken, for the kinds that hold more than
+  -- one. Blank for a plain link, where the block already is the answer.
+  target      TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX clicks_page_ts ON clicks (page_id, ts);

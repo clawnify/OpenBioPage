@@ -16,6 +16,7 @@
 // so a client's colour never becomes a hardcoded value in this file.
 
 import { buttonCss, resolveTheme, type ResolvedTheme, type Theme } from "./theme.js";
+import { readSocials, socialIcon, socialLabel } from "./socials.js";
 
 export interface RenderPage {
   id: string;
@@ -179,6 +180,20 @@ function renderBlock(b: RenderBlock, origin: string): string {
 
   if (b.kind === "header") return `<li><h2>${label}</h2></li>`;
 
+  if (b.kind === "socials") {
+    const items = readSocials(b.meta);
+    if (!items.length) return "";
+    // Each one still goes through the counting redirect, so a tap on a social
+    // mark is as much yours as a tap on a button.
+    const marks = items
+      .map(
+        (s) =>
+          `<li><a class="social" href="/r/${escapeHtml(b.id)}/${escapeHtml(s.p)}" rel="noopener" aria-label="${escapeHtml(socialLabel(s.p))}">${socialIcon(s.p)}</a></li>`,
+      )
+      .join("");
+    return `<li><ul class="socials">${marks}</ul></li>`;
+  }
+
   if (b.kind === "email") {
     return `<li><form method="post" action="/api/public/subscribe">
 <input type="hidden" name="block" value="${escapeHtml(b.id)}">
@@ -250,6 +265,16 @@ h2{font-family:${t.headingFont};font-size:.8125rem;font-weight:600;letter-spacin
 .embed{position:relative;padding-top:56.25%;border-radius:${t.corner};overflow:hidden;
   border:1px solid color-mix(in oklab,${t.foreground} 22%,transparent)}
 .embed iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+/* The generic list rule stacks rows into a column; this one is a row and has to
+   say so, or it inherits the column and lists the marks vertically. */
+.socials{display:flex;flex-direction:row;flex-wrap:wrap;gap:12px;justify-content:${t.align === "left" ? "flex-start" : "center"};
+  list-style:none;margin:2px 0;padding:0}
+a.social{display:grid;place-items:center;width:40px;height:40px;border-radius:999px;color:inherit;
+  opacity:.85;transition:opacity .12s ease,background-color .12s ease}
+a.social:hover{opacity:1;background:color-mix(in oklab,${t.foreground} 10%,transparent)}
+a.social:focus-visible{outline:2px solid ${t.accent};outline-offset:2px}
+/* The YouTube notch is a hole in the mark, so it takes the page behind it. */
+a.social{--yt-notch:${t.background}}
 form{display:flex;gap:8px;flex-wrap:wrap}
 input[type=email]{flex:1 1 12rem;padding:14px 16px;border-radius:${t.corner};font:inherit;
   color:inherit;background:color-mix(in oklab,${t.foreground} 6%,transparent);

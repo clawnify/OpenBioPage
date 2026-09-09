@@ -37,7 +37,7 @@ export interface BlockStat {
   clicks_30d: number;
 }
 
-export type BlockKind = "link" | "header" | "embed" | "email";
+export type BlockKind = "link" | "header" | "embed" | "email" | "socials";
 
 export interface Block {
   id: string;

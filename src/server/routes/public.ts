@@ -17,6 +17,7 @@ import { get, query, run } from "../db.js";
 import { uid, now, type App } from "../env.js";
 import { renderPage, safeUrl, type RenderBlock, type RenderPage } from "../render.js";
 import { customThemeFor } from "../page-theme.js";
+import { readSocials } from "../socials.js";
 
 /** Cache the rendered page at the edge briefly: a link page is read far more
  *  often than it is edited, and an agency's change should still show up fast. */
@@ -56,14 +57,22 @@ export function registerPublic(app: App) {
   // ── The counting redirect ───────────────────────────────────────────────
   // Every link on the page points here. One row, then a 302. No script on the
   // page means no click can be lost to a blocked beacon or a fast tap.
-  app.get("/r/:id", async (c) => {
+  // `/r/{block}` is a plain link; `/r/{block}/{target}` is one entry inside a
+  // block that holds several, which today means a social mark.
+  app.get("/r/:id/:target?", async (c) => {
     const id = c.req.param("id");
-    const block = await get<{ id: string; org_id: string; page_id: string; url: string; active: number }>(
-      `SELECT id, org_id, page_id, url, active FROM blocks WHERE id = ?`,
+    const target = c.req.param("target") ?? "";
+    const block = await get<{ id: string; org_id: string; page_id: string; url: string; meta: string; active: number }>(
+      `SELECT id, org_id, page_id, url, meta, active FROM blocks WHERE id = ?`,
       [id],
     );
 
-    const destination = block && block.active === 1 ? safeUrl(block.url) : null;
+    const destination =
+      block && block.active === 1
+        ? target
+          ? safeUrl(readSocials(block.meta).find((s) => s.p === target)?.url ?? "")
+          : safeUrl(block.url)
+        : null;
     if (!block || !destination) return c.text("Not found", 404);
 
     // Referrer is reduced to a host and the country comes from the edge: enough
@@ -80,9 +89,9 @@ export function registerPublic(app: App) {
     // A failed write must never cost the visitor their click.
     try {
       await run(
-        `INSERT INTO clicks (id, org_id, page_id, block_id, ts, referrer, country)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [uid(), block.org_id, block.page_id, block.id, now(), referrer.slice(0, 120), country.slice(0, 2)],
+        `INSERT INTO clicks (id, org_id, page_id, block_id, ts, referrer, country, target)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [uid(), block.org_id, block.page_id, block.id, now(), referrer.slice(0, 120), country.slice(0, 2), target.slice(0, 40)],
       );
     } catch (err) {
       console.error("click write failed", err);
