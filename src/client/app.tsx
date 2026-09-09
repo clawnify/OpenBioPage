@@ -802,6 +802,16 @@ function mergeTheme(theme: string, patch: Record<string, unknown>): string {
 }
 
 /** `meta` is a JSON string on the wire; the only field in it today is `note`. */
+const UNNAMED = "New link";
+
+function readMeta(meta: string): { note?: string; image?: string } {
+  try {
+    return JSON.parse(meta) as { note?: string; image?: string };
+  } catch {
+    return {};
+  }
+}
+
 function readNote(meta: string): string {
   try {
     return (JSON.parse(meta) as { note?: string }).note ?? "";
@@ -830,10 +840,41 @@ function BlockCard({
   const takesUrl = block.kind === "link" || block.kind === "embed";
   const takesNote = block.kind === "link";
   const note = readNote(block.meta);
+  const image = readMeta(block.meta).image;
+  const [reading, setReading] = useState(false);
+
+  /**
+   * Save the URL, then ask the destination what it calls itself.
+   *
+   * The title only lands on a row nobody has named — an unnamed row is a
+   * suggestion, a named one is a decision, and overwriting the second would be
+   * the app arguing with the person using it. The image is taken either way,
+   * because nobody types one.
+   */
+  async function onEnrich(url: string) {
+    onPatch({ url });
+    if (block.kind !== "link" || !/^https?:\/\//i.test(url)) return;
+
+    setReading(true);
+    try {
+      const meta = await api.linkMeta(url);
+      const patch: Partial<Pick<Block, "label" | "meta">> = {};
+      if (meta.title && block.label === UNNAMED) patch.label = meta.title;
+      if (meta.image) patch.meta = JSON.stringify({ ...readMeta(block.meta), image: meta.image });
+      if (Object.keys(patch).length) onPatch(patch);
+    } catch {
+      // The row is already saved; a page that will not describe itself just
+      // means the label stays as typed.
+    } finally {
+      setReading(false);
+    }
+  }
 
   return (
     <li className={`card p-4 ${block.active ? "" : "opacity-60"}`}>
       <div className="flex items-start gap-3">
+        {image && <img src={`/m/${image}`} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover" />}
+
         <div className="min-w-0 flex-1">
           <InlineEdit
             value={block.label}
@@ -844,7 +885,7 @@ function BlockCard({
           {takesUrl && (
             <InlineEdit
               value={block.url}
-              onCommit={(v) => v !== block.url && onPatch({ url: v })}
+              onCommit={(v) => v !== block.url && onEnrich(v)}
               className="font-mono text-xs text-muted"
               label="URL"
             />
@@ -878,6 +919,7 @@ function BlockCard({
         {/* Hiding keeps the history; deleting does not. The count sits at the
             moment of that decision so the difference is visible. */}
         <span className="tnum ml-2">{clicks} clicks, 30 days</span>
+        {reading && <span className="text-faint">Reading the page.</span>}
         <button type="button" onClick={onDelete} className="ml-auto rounded-sm px-2 py-1 text-danger hover:bg-danger-tint">
           Delete
         </button>

@@ -4,6 +4,7 @@
 import { createRoute, orgId, z } from "@clawnify/app";
 import { get, query, run } from "../db.js";
 import { fail, now, ok, uid, type App } from "../env.js";
+import { mirrorImage, readLinkMeta } from "../link-meta.js";
 
 const KINDS = ["link", "header", "embed", "email"] as const;
 
@@ -106,6 +107,36 @@ export function registerBlocks(app: App) {
 
     const created = await get(`SELECT * FROM blocks WHERE id = ?`, [id]);
     return c.json(created as never);
+  });
+
+  // What a URL says about itself, so the editor can fill the row in rather than
+  // asking someone to retype a title that is already published on the page.
+  const inspect = createRoute({
+    method: "get",
+    path: "/api/link-meta",
+    tags: ["Blocks"],
+    summary: "Read a URL's own title, description and image",
+    request: { query: z.object({ url: z.string().max(2000) }) },
+    responses: {
+      200: ok(
+        "What the page publishes about itself; blank fields when it publishes none",
+        z.object({ title: z.string(), description: z.string(), image: z.string() }),
+      ),
+      403: fail("No organisation"),
+    },
+  });
+
+  app.openapi(inspect, async (c) => {
+    const org = orgId(c);
+    if (!org) return c.json({ error: "No organisation on this request" }, 403);
+
+    const meta = await readLinkMeta(c.req.valid("query").url);
+    // The image is copied into this app's own bucket rather than hotlinked.
+    // A remote <img> would be the first external request the public page has
+    // ever made, which tells the destination who is looking at the page before
+    // anyone clicks, and leaves the row dependent on someone else's uptime.
+    const image = meta.image ? await mirrorImage(c.env.UPLOADS, org, meta.image) : "";
+    return c.json({ ...meta, image } as never);
   });
 
   const update = createRoute({

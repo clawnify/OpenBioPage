@@ -81,6 +81,21 @@ Full shapes are in `/llms.txt`; these are the ones you write most.
   inlined. If a brand colour comes out looking wrong, it was refused, not lost:
   send a hex.
 
+### Adding a link
+
+`GET /api/link-meta?url=` reads the destination's own `og:title`,
+`og:description` and `og:image` and returns them, having already copied the
+image into this app's bucket — so the `image` you get back is a key for `/m/`,
+not somebody else's URL. Put it in the block's `meta` as
+`{"note":"…","image":"<key>"}` and it renders as a 40px thumbnail on the row.
+
+Use it instead of asking the user to retype a title that the page already
+publishes. It costs a fetch, not a model call and not a screenshot: both of
+those exist and neither is the right tool for four meta tags.
+
+Blank fields mean the page publishes none. That is normal and not an error —
+fall back to whatever label the person gave you.
+
 ### Putting a photograph behind a page
 
 `POST /api/uploads` with the image as the raw body and its real `Content-Type`

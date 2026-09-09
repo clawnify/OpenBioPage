@@ -74,6 +74,10 @@ export interface TemplateRow {
 export const api = {
   // Sent as a raw body rather than multipart: there is one file and no fields,
   // and the content type is the only thing the route needs to know.
+  linkMeta: (url: string) =>
+    request<{ title: string; description: string; image: string }>(
+      `/api/link-meta?url=${encodeURIComponent(url)}`,
+    ),
   upload: async (file: File): Promise<{ key: string; url: string }> => {
     const res = await fetch("/api/uploads", { method: "POST", headers: { "Content-Type": file.type }, body: file });
     if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error || res.statusText);

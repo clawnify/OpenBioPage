@@ -34,6 +34,10 @@ around it:
   and which rules matter. Edit it yourself or hand it to an agent, paste it
   back, and it is a template your pages can wear. The prose survives the round
   trip, so the reasoning outlives the person who had it.
+- **Paste a URL and the row fills itself in.** The destination's own title and
+  image come back from its meta tags — a fetch, not a model call. The image is
+  copied into this app's bucket, so a page with ten thumbnails still makes zero
+  requests to anyone else and still tells nobody who is reading it.
 - **A photograph can be the page.** Upload one and the header becomes a hero:
   the image full-bleed, the name over it. The app computes how much to darken it
   and will not go lighter, because a photo cannot be contrast-checked and the

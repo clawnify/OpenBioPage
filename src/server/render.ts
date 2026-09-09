@@ -163,9 +163,16 @@ ${footer}
 function renderBlock(b: RenderBlock, origin: string): string {
   const label = escapeHtml(b.label);
   let note = "";
+  let thumb = "";
   try {
-    const meta = JSON.parse(b.meta) as { note?: string };
+    const meta = JSON.parse(b.meta) as { note?: string; image?: string };
     if (typeof meta?.note === "string" && meta.note) note = `<span class="note">${escapeHtml(meta.note)}</span>`;
+    // The destination's own image, copied into this app's bucket when the row
+    // was made, so the page still makes no request to anyone else.
+    const key = typeof meta?.image === "string" && /^[\w./-]{1,200}$/.test(meta.image) ? meta.image : null;
+    if (key) {
+      thumb = `<img class="thumb" src="/m/${encodeURIComponent(key)}" alt="" loading="lazy" decoding="async" width="40" height="40">`;
+    }
   } catch {
     // A malformed meta blob costs the note, never the row.
   }
@@ -192,7 +199,7 @@ function renderBlock(b: RenderBlock, origin: string): string {
   // works the same on the custom domain and on the platform subdomain.
   void origin;
   if (!safeUrl(b.url)) return "";
-  return `<li><a class="link" href="/r/${escapeHtml(b.id)}" rel="noopener">${label}${note}</a></li>`;
+  return `<li><a class="link${thumb ? " has-thumb" : ""}" href="/r/${escapeHtml(b.id)}" rel="noopener">${thumb}<span class="label">${label}${note}</span></a></li>`;
 }
 
 /**
@@ -230,6 +237,10 @@ h1{font-family:${t.headingFont};font-size:${t.header === "hero" ? "1.875rem" : "
 ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px}
 ${buttonCss(t)}
 a.link:focus-visible{outline:2px solid ${t.accent};outline-offset:3px}
+a.link{position:relative}
+.thumb{position:absolute;left:8px;top:50%;transform:translateY(-50%);
+  width:40px;height:40px;border-radius:calc(${t.corner} - 6px);object-fit:cover}
+a.link.has-thumb{padding-left:58px;padding-right:58px}
 .note{display:block;font-weight:400;opacity:.78;font-size:.8125rem;margin-top:3px}
 h2{font-family:${t.headingFont};font-size:.8125rem;font-weight:600;letter-spacing:.04em;
   text-transform:uppercase;opacity:.55;margin:22px 0 -2px}
