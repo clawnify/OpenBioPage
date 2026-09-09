@@ -1,7 +1,7 @@
 {
   "$schema": "https://app.clawnify.com/schema/v1/clawnify.json",
   "version": 1,
-  "name": "OpenPerch",
+  "name": "OpenBioPage",
   "description": "Link-in-bio pages you own. Run one page or fifty from a single install, each on its own custom domain, with the click history in your database instead of a vendor's. An open alternative to Linktree, Beacons and Bio.link, built for agencies running pages for their clients.",
   "icon": "icon.svg",
   "tags": ["link-in-bio", "linktree-alternative", "agency", "white-label", "marketing"],
@@ -28,7 +28,7 @@
   },
 
   "deploy": {
-    "title": "Deploy your OpenPerch",
+    "title": "Deploy your OpenBioPage",
     "subtitle": "Link pages on your own domains, with the click data in your own database.",
     "prompts": [
       {

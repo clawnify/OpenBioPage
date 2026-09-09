@@ -1,4 +1,4 @@
-# OpenPerch
+# OpenBioPage
 
 Link-in-bio pages you own.
 

@@ -45,7 +45,7 @@ export function App() {
   return (
     <div className="flex min-h-screen flex-col md:flex-row">
       <AppNav
-        title="OpenPerch"
+        title="OpenBioPage"
         icon="link"
         groups={[{ items: NAV }]}
         active={view === "templates" ? "templates" : selected ? "pages" : "overview"}

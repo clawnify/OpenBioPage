@@ -1,4 +1,4 @@
-// OpenPerch — the API.
+// OpenBioPage — the API.
 //
 // `createApp` brings the OpenAPI router, the per-request database wiring, and
 // the two discovery routes (`/api/openapi.json`, `/llms.txt`) that let the org's
@@ -16,7 +16,7 @@ import { registerUploads } from "./routes/uploads.js";
 import { registerPublic } from "./routes/public.js";
 
 const app = createApp<Env>({
-  title: "OpenPerch",
+  title: "OpenBioPage",
   version: "1.0.0",
   description:
     "Link-in-bio pages an agency runs for its clients: one install, many pages, each on its own domain, with every click written to this app's own database rather than rented back from a vendor.",

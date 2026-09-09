@@ -1,4 +1,4 @@
-# OpenPerch
+# OpenBioPage
 
 Link pages for the people this org serves. One install holds every page; an
 agency runs one per client, a single person runs one.

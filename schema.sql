@@ -1,4 +1,4 @@
--- OpenPerch schema.
+-- OpenBioPage schema.
 --
 -- One install holds many pages. An agency runs a page per client; a single
 -- person runs one. Nothing here knows about an agency: a page is a page, and

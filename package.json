@@ -1,9 +1,9 @@
 {
-  "name": "open-perch",
+  "name": "open-bio-page",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler d1 execute open-perch-db --local --file=schema.sql && concurrently -n ui,api -c cyan,green \"vite\" \"wrangler dev --port 8792\"",
+    "dev": "wrangler d1 execute open-bio-page-db --local --file=schema.sql && concurrently -n ui,api -c cyan,green \"vite\" \"wrangler dev --port 8792\"",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

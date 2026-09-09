@@ -74,7 +74,7 @@ export async function readLinkMeta(raw: string): Promise<LinkMeta> {
         // Some sites serve a different head to a bare client; asking for HTML
         // and naming ourselves gets the document a browser would get.
         accept: "text/html,application/xhtml+xml",
-        "user-agent": "Mozilla/5.0 (compatible; OpenPerch link preview)",
+        "user-agent": "Mozilla/5.0 (compatible; OpenBioPage link preview)",
       },
     });
   } catch {
