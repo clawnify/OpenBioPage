@@ -80,6 +80,24 @@ Full shapes are in `/llms.txt`; these are the ones you write most.
   so it stays readable, and a colour the app cannot parse is ignored rather than
   inlined. If a brand colour comes out looking wrong, it was refused, not lost:
   send a hex.
+
+### Writing a template
+
+A look you will reuse belongs in a template rather than repeated on every page.
+
+- `GET /api/templates` — the eight built-ins plus this org's own.
+- `GET /api/templates/{slug}/markdown` — the template as a document: a
+  frontmatter block of fields, then prose about what the look is for and which
+  of its rules are load-bearing.
+- `POST /api/templates` `{ markdown }` — add or replace one. The slug comes
+  from the frontmatter. A built-in's slug is refused; pick another.
+- `DELETE /api/templates/{slug}` — custom templates only.
+
+The intended loop is: download the closest built-in, edit it for the client,
+post it back, then set the page's theme to `{"preset":"<your-slug>"}`. Edit the
+prose as well as the fields. It is what the next editor — you, next month, or a
+person — reads to know why the look is the way it is, and it survives the round
+trip untouched.
 - `PUT /api/settings` — the default footer credit for pages created from here on.
   It does not rewrite pages that already exist.
 

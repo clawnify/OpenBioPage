@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { AppNav, reportLocation, type AppNavItem } from "@clawnify/app/client";
-import { api, type BlockStat, type PageRow } from "./api";
+import { api, type BlockStat, type PageRow, type TemplateRow } from "./api";
 
 const NAV: AppNavItem[] = [
   { id: "overview", label: "Overview", href: "/", home: true },
   { id: "pages", label: "Pages", href: "/pages", icon: "link", color: "violet" },
+  { id: "templates", label: "Templates", href: "/templates", icon: "palette", color: "amber" },
   { id: "settings", label: "Settings", href: "/settings", icon: "settings" },
 ];
 
@@ -16,6 +17,7 @@ function staleWeeks(iso: string): number {
 export function App() {
   const [rows, setRows] = useState<PageRow[]>([]);
   const [selected, setSelected] = useState<PageRow | null>(null);
+  const [view, setView] = useState<"overview" | "templates">("overview");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -46,18 +48,23 @@ export function App() {
         title="OpenPerch"
         icon="link"
         groups={[{ items: NAV }]}
-        active={selected ? "pages" : "overview"}
-        onNavigate={() => setSelected(null)}
+        active={view === "templates" ? "templates" : selected ? "pages" : "overview"}
+        onNavigate={(item) => {
+          setSelected(null);
+          setView(item.id === "templates" ? "templates" : "overview");
+        }}
       />
 
       <main className="min-w-0 flex-1 p-6 md:p-8">
         <h1 className="text-[1.375rem] font-semibold tracking-[-0.01em]">
-          {selected ? selected.title : "Overview"}
+          {selected ? selected.title : view === "templates" ? "Templates" : "Overview"}
         </h1>
         <p className="mt-1 text-sm text-muted">
           {selected
             ? "Clicks by row over the last 30 days, busiest first."
-            : "Every page you run, stalest first."}
+            : view === "templates"
+              ? "Every look a page can wear. Download one as markdown to edit it."
+              : "Every page you run, stalest first."}
         </p>
 
         {error && (
@@ -66,6 +73,8 @@ export function App() {
 
         {selected ? (
           <PageDetail page={selected} onBack={() => setSelected(null)} />
+        ) : view === "templates" ? (
+          <Templates />
         ) : (
           <>
             <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -201,4 +210,166 @@ function Badge({ children, tone }: { children: React.ReactNode; tone?: "danger" 
         ? "bg-warning-tint text-warning"
         : "bg-sunken text-muted";
   return <span className={`rounded-sm px-2 py-0.5 text-xs font-medium ${cls}`}>{children}</span>;
+}
+
+/** Phone width the preview renders at before being scaled into the card. */
+const PREVIEW_WIDTH = 390;
+
+/**
+ * Scale that fits a `PREVIEW_WIDTH` frame into however wide the card actually
+ * is. A fixed factor clipped the right edge on narrow columns and left a gap on
+ * wide ones, and the grid is responsive, so the number has to come from the
+ * element rather than from a guess.
+ */
+function usePreviewScale() {
+  const [scale, setScale] = useState(0.6);
+  const ref = useCallback((node: HTMLDivElement | null) => {
+    if (!node) return;
+    const observer = new ResizeObserver(([entry]) => {
+      setScale(entry.contentRect.width / PREVIEW_WIDTH);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+  return { ref, scale };
+}
+
+/**
+ * The gallery. Each card previews through the real public renderer in an
+ * iframe, so what you see here is what a visitor gets rather than a mock that
+ * drifts from it.
+ */
+function Templates() {
+  const [items, setItems] = useState<TemplateRow[]>([]);
+  const [markdown, setMarkdown] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+
+  const load = useCallback(() => {
+    void api.templates().then(
+      (d) => setItems(d.items),
+      (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
+    );
+  }, []);
+
+  useEffect(load, [load]);
+
+  async function add() {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.addTemplate(markdown);
+      setMarkdown("");
+      setAdding(false);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(slug: string) {
+    await api.deleteTemplate(slug);
+    load();
+  }
+
+  return (
+    <>
+      <div className="mt-6 flex items-center gap-2">
+        <button type="button" className="h-7 rounded-sm bg-primary px-3 text-sm font-medium text-on-primary hover:bg-primary-hover disabled:opacity-60" onClick={() => setAdding((v) => !v)}>
+          {adding ? "Cancel" : "Add a template"}
+        </button>
+        <p className="text-sm text-muted">
+          Download any card as markdown, edit it (or have your agent edit it), and paste it back.
+        </p>
+      </div>
+
+      {adding && (
+        <section className="card mt-4 p-5">
+          <label htmlFor="template-md" className="text-sm font-medium">
+            Paste a template
+          </label>
+          <p className="mt-1 text-sm text-muted">
+            A <code>---</code> frontmatter block with the fields, then any notes you want the next
+            editor to read.
+          </p>
+          <textarea
+            id="template-md"
+            value={markdown}
+            onChange={(e) => setMarkdown(e.currentTarget.value)}
+            rows={10}
+            spellCheck={false}
+            placeholder={"---\nslug: client-brand\nname: Client Brand\ntagline: What it is for\nbackground: \"#ffffff\"\naccent: \"#1b1a19\"\nfont: sans\nbutton: outline\ncorner: round\n---\n\nWhat matters about this look."}
+            className="mt-3 w-full rounded-md bg-sunken p-3 font-mono text-xs shadow-[inset_0_0_0_1px_var(--border)] focus-visible:outline-2 focus-visible:outline-ring"
+          />
+          <button
+            type="button"
+            className="mt-3 h-7 rounded-sm bg-primary px-3 text-sm font-medium text-on-primary hover:bg-primary-hover disabled:opacity-60"
+            disabled={busy || markdown.trim() === ""}
+            onClick={() => void add()}
+          >
+            {busy ? "Saving." : "Save template"}
+          </button>
+        </section>
+      )}
+
+      {error && <div className="mt-4 rounded-lg bg-danger-tint px-4 py-3 text-sm text-danger">{error}</div>}
+
+      <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {items.map((t) => (
+          <TemplateCard key={t.slug} template={t} onDelete={() => void remove(t.slug)} />
+        ))}
+      </div>
+    </>
+  );
+}
+
+function TemplateCard({ template: t, onDelete }: { template: TemplateRow; onDelete: () => void }) {
+  const { ref, scale } = usePreviewScale();
+
+  return (
+    <article className="card overflow-hidden">
+      <div
+        ref={ref}
+        className="overflow-hidden border-b border-border bg-sunken"
+        style={{ height: 470 * scale }}
+      >
+        <iframe
+          src={`/api/templates/${encodeURIComponent(t.slug)}/preview`}
+          title={`${t.name} preview`}
+          loading="lazy"
+          tabIndex={-1}
+          // The frame is a picture, not a document to read: no scrollbar, and
+          // nothing inside it takes focus away from the card.
+          scrolling="no"
+          className="pointer-events-none origin-top-left border-0"
+          style={{ width: PREVIEW_WIDTH, height: 470, transform: `scale(${scale})` }}
+        />
+      </div>
+      <div className="p-4">
+        <div className="flex items-baseline gap-2">
+          <h3 className="text-sm font-semibold">{t.name}</h3>
+          {!t.builtin && <Badge tone="warning">yours</Badge>}
+        </div>
+        <p className="mt-1 line-clamp-2 text-xs text-muted">{t.tagline}</p>
+        <div className="mt-3 flex items-center gap-3 text-xs">
+          <a
+            className="text-accent hover:underline"
+            href={`/api/templates/${encodeURIComponent(t.slug)}/markdown`}
+            download
+          >
+            Download .md
+          </a>
+          <code className="text-faint">{t.slug}</code>
+          {!t.builtin && (
+            <button type="button" className="ml-auto text-danger hover:underline" onClick={onDelete}>
+              Delete
+            </button>
+          )}
+        </div>
+      </div>
+    </article>
+  );
 }

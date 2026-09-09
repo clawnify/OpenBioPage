@@ -90,30 +90,132 @@ const CORNERS: Record<Corner, string> = { sharp: "0px", round: "12px", pill: "99
 const AVATARS: Record<AvatarShape, string> = { circle: "50%", rounded: "22%", square: "0" };
 
 /**
- * The presets. Each one is a position, not a palette: someone who wants the
- * page to disappear picks `mono`, someone selling to teenagers picks `candy`.
- * Adding one is adding a row here and nothing else.
+ * A template is a look plus the prose that explains it.
+ *
+ * The prose is not decoration. A template is downloadable as markdown and
+ * handed to an AI to edit ("make this one colder", "this is for a law firm"),
+ * and the fields alone do not say which parts are load-bearing. `notes` is
+ * where the judgment lives — the rule that a filled button ruins `paper`
+ * survives a round trip through an editor; `button: outline` does not explain
+ * itself.
  */
-export const PRESETS: Record<string, Theme> = {
-  // The designer's page. White, hairline outlines, nothing decorative.
-  mono: { background: "#ffffff", foreground: "#111111", accent: "#111111", font: "mono", button: "outline", corner: "sharp", avatar: "square" },
-  // Ink. Reads expensive, works for photographers and studios.
-  ink: { background: "#0e0e0f", foreground: "#f4f3f1", accent: "#f4f3f1", font: "sans", button: "soft", corner: "round", avatar: "circle" },
-  // Warm paper and a serif. Bookshops, writers, restaurants.
-  paper: { background: "#f6f1e7", foreground: "#2b2622", accent: "#7a5c3e", font: "serif", button: "outline", corner: "round", avatar: "circle" },
-  // A gradient and white pills. The look most creators actually want. The stops
-  // are darker than a sunset "should" be for one reason: at #ff8a5b the white
-  // text measured 2.32:1, which looks fine in a screenshot and is unreadable to
-  // anyone who needs the contrast. Both stops now clear 4.5:1.
-  sunset: { background: "#a83a2f", background2: "#8c1d4e", angle: 160, foreground: "#ffffff", accent: "#ffffff", font: "rounded", button: "fill", corner: "pill", avatar: "circle" },
-  // Hard offset shadows, no blur. Loud on purpose.
-  brutal: { background: "#fdf35e", foreground: "#101010", accent: "#101010", font: "condensed", button: "shadow", corner: "sharp", avatar: "square" },
-  // Cool and quiet. Consultants, B2B, anyone who wants to look calm.
-  slate: { background: "#eef1f4", foreground: "#1d2430", accent: "#2f5bd8", font: "sans", button: "soft", corner: "round", avatar: "rounded" },
-  // Soft pastels and full pills.
-  candy: { background: "#fff0f6", background2: "#e7f0ff", angle: 200, foreground: "#3a2b3f", accent: "#e0559a", font: "rounded", button: "fill", corner: "pill", avatar: "circle" },
-  // Deep green, gold accent. Hospitality.
-  forest: { background: "#12241c", foreground: "#eef3ee", accent: "#c9a961", font: "serif", button: "outline", corner: "round", avatar: "circle" },
+export interface Template {
+  name: string;
+  tagline: string;
+  notes: string;
+  theme: Theme;
+}
+
+/**
+ * The built-in templates. Each one is a position, not a palette: someone who
+ * wants the page to disappear picks `mono`, someone selling to teenagers picks
+ * `candy`. Adding one is adding a row here and nothing else.
+ */
+export const PRESETS: Record<string, Template> = {
+  mono: {
+    name: "Mono",
+    tagline: "White, hairline outlines, monospace. The page gets out of the way.",
+    notes: `For people whose own work is the thing worth looking at: designers,
+photographers, developers. Nothing here is decorative, and that is the point.
+
+Rules that matter:
+- The buttons stay outlines. Filling them puts the page ahead of the work.
+- Corners stay square. A rounded corner here reads as a consumer app.
+- If a brand colour has to go in, put it on \`accent\` only, and let the
+  buttons keep their hairline border.`,
+    theme: { background: "#ffffff", foreground: "#111111", accent: "#111111", font: "mono", button: "outline", corner: "sharp", avatar: "square" },
+  },
+  ink: {
+    name: "Ink",
+    tagline: "Near-black ground, soft filled buttons. Reads expensive.",
+    notes: `Studios, photographers, anyone whose work is images. A dark ground
+makes thumbnails and embeds sit better than a white one does.
+
+Rules that matter:
+- The buttons are soft fills, not outlines: a hairline on near-black
+  disappears at phone brightness.
+- Keep \`accent\` near-white unless the brand demands otherwise. A saturated
+  accent on this ground vibrates.`,
+    theme: { background: "#0e0e0f", foreground: "#f4f3f1", accent: "#f4f3f1", font: "sans", button: "soft", corner: "round", avatar: "circle" },
+  },
+  paper: {
+    name: "Paper",
+    tagline: "Warm stock and a serif. Printed, not published.",
+    notes: `Bookshops, writers, restaurants, anyone who would rather look like
+a printed thing than a website.
+
+Rules that matter:
+- The buttons never fill. A filled button on this ground reads as a web form
+  dropped into a book.
+- The serif carries both display and body on purpose. Pairing it with a sans
+  body is the single fastest way to lose the feel.`,
+    theme: { background: "#f6f1e7", foreground: "#2b2622", accent: "#7a5c3e", font: "serif", button: "outline", corner: "round", avatar: "circle" },
+  },
+  sunset: {
+    name: "Sunset",
+    tagline: "A gradient and white pills. The look most creators want.",
+    notes: `Musicians, creators, anyone whose audience arrives from a social
+profile and expects colour.
+
+Rules that matter:
+- The stops are darker than a sunset "should" be, and that is deliberate: the
+  first version measured 2.32:1 for white body text. Both stops now clear
+  4.5:1. If you lighten them, re-check the contrast or the page becomes
+  unreadable for the people who need it most.
+- The buttons are white fills. On a gradient, an outline button loses its
+  edge halfway down the page.`,
+    theme: { background: "#a83a2f", background2: "#8c1d4e", angle: 160, foreground: "#ffffff", accent: "#ffffff", font: "rounded", button: "fill", corner: "pill", avatar: "circle" },
+  },
+  brutal: {
+    name: "Brutal",
+    tagline: "Hard offset shadows, condensed caps, no blur. Loud on purpose.",
+    notes: `Clubs, gigs, streetwear, sunday-league teams. It is shouting, and
+it should be used where shouting is correct.
+
+Rules that matter:
+- The shadow has no blur and no easing. The offset snapping to zero on press
+  is the entire effect; softening it leaves a bad drop shadow.
+- The heading typeface is condensed and uppercase. Sentence case here reads
+  as a mistake rather than a choice.`,
+    theme: { background: "#fdf35e", foreground: "#101010", accent: "#101010", font: "condensed", button: "shadow", corner: "sharp", avatar: "square" },
+  },
+  slate: {
+    name: "Slate",
+    tagline: "Cool, quiet, blue accent. Looks like it has a compliance team.",
+    notes: `Consultants, B2B, agencies selling to enterprises. The job is to
+look unsurprising.
+
+Rules that matter:
+- The accent is the only colour. Adding a second one turns a considered page
+  into a template.
+- Soft fills, not outlines: on a light grey ground a hairline border reads as
+  a disabled control.`,
+    theme: { background: "#eef1f4", foreground: "#1d2430", accent: "#2f5bd8", font: "sans", button: "soft", corner: "round", avatar: "rounded" },
+  },
+  candy: {
+    name: "Candy",
+    tagline: "Pastel gradient, full pills, rounded type. Unashamedly sweet.",
+    notes: `Streamers, creators with a young audience, anything where "pretty"
+is the point rather than a compromise.
+
+Rules that matter:
+- The pills go all the way round. A 12px corner here looks like a bug.
+- Button text is computed dark, not white: white on this pink measures 2.6:1
+  and the app will refuse to do it.`,
+    theme: { background: "#fff0f6", background2: "#e7f0ff", angle: 200, foreground: "#3a2b3f", accent: "#e0559a", font: "rounded", button: "fill", corner: "pill", avatar: "circle" },
+  },
+  forest: {
+    name: "Forest",
+    tagline: "Deep green, gold accent, serif. Hospitality.",
+    notes: `Hotels, restaurants, wineries — places that print a menu.
+
+Rules that matter:
+- Gold is the accent, never the ground. A gold background loses the contrast
+  the whole look depends on.
+- Outline buttons keep it quiet. Filling them in gold turns a dining room
+  into a casino.`,
+    theme: { background: "#12241c", foreground: "#eef3ee", accent: "#c9a961", font: "serif", button: "outline", corner: "round", avatar: "circle" },
+  },
 };
 
 export const PRESET_NAMES = Object.keys(PRESETS);
@@ -161,7 +263,7 @@ const pick = <T extends string>(raw: unknown, allowed: Record<T, unknown>, fallb
  * anything still missing. An author who names a preset and one colour gets the
  * preset with that colour, which is the edit people actually make.
  */
-export function resolveTheme(raw: string): ResolvedTheme {
+export function resolveTheme(raw: string, custom?: Theme | null): ResolvedTheme {
   let theme: Theme = {};
   try {
     const parsed = JSON.parse(raw) as Theme;
@@ -170,7 +272,10 @@ export function resolveTheme(raw: string): ResolvedTheme {
     // A malformed theme costs the look, never the page.
   }
 
-  const base = (theme.preset && PRESETS[theme.preset]) || {};
+  // A named preset resolves to a built-in first, then to the custom template
+  // the caller loaded for this page. An unknown name resolves to nothing,
+  // which leaves the defaults rather than an unstyled page.
+  const base: Theme = (theme.preset && PRESETS[theme.preset]?.theme) || custom || {};
   const t: Theme = { ...base, ...theme };
 
   const font = FONTS[pick<FontKey>(t.font, FONTS, "sans")];

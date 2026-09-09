@@ -15,7 +15,7 @@
 // Brand values arrive as CSS custom properties from the page's `theme` column,
 // so a client's colour never becomes a hardcoded value in this file.
 
-import { buttonCss, resolveTheme, type ResolvedTheme } from "./theme.js";
+import { buttonCss, resolveTheme, type ResolvedTheme, type Theme } from "./theme.js";
 
 export interface RenderPage {
   id: string;
@@ -90,8 +90,14 @@ function embedFrame(url: string): string | null {
  * The whole page. Returns a complete HTML document; the caller sets the status
  * and cache headers.
  */
-export function renderPage(page: RenderPage, blocks: RenderBlock[], origin: string): string {
-  const t = resolveTheme(page.theme);
+export function renderPage(
+  page: RenderPage,
+  blocks: RenderBlock[],
+  origin: string,
+  /** The org's own template, when the page names one that is not built in. */
+  custom?: Theme | null,
+): string {
+  const t = resolveTheme(page.theme, custom);
 
   const canonical = page.hostname
     ? `https://${page.hostname}/p/${encodeURIComponent(page.slug)}`

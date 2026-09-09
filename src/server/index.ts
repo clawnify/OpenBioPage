@@ -11,6 +11,7 @@ import { registerBlocks } from "./routes/blocks.js";
 import { registerStats } from "./routes/stats.js";
 import { registerChecks } from "./routes/checks.js";
 import { registerSettings } from "./routes/settings.js";
+import { registerTemplates } from "./routes/templates.js";
 import { registerPublic } from "./routes/public.js";
 
 const app = createApp<Env>({
@@ -30,6 +31,7 @@ registerBlocks(app);
 registerStats(app);
 registerChecks(app);
 registerSettings(app);
+  registerTemplates(app);
 
 // Last, and off the OpenAPI surface: the public page, the counting redirect and
 // the avatar. Registered after the authenticated routes so a public path can

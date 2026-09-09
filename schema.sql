@@ -95,3 +95,25 @@ CREATE TABLE settings (
   logo_key     TEXT,
   updated_at   TEXT NOT NULL
 );
+
+-- A custom template: a look someone wrote, or had an AI write, as markdown.
+--
+-- The built-in templates are code, not rows — they ship with the app and every
+-- install has the same eight. This table holds only what an org added. A page
+-- names one the same way it names a built-in, through `theme.preset`.
+--
+-- `body_md` is the whole document as uploaded, prose included. It is the thing
+-- handed back on download, so an editor's notes survive a round trip even
+-- though the renderer only reads the fields parsed out of it.
+CREATE TABLE templates (
+  slug       TEXT NOT NULL,
+  org_id     TEXT NOT NULL,
+  name       TEXT NOT NULL,
+  tagline    TEXT NOT NULL DEFAULT '',
+  -- JSON of the theme fields parsed out of the markdown frontmatter.
+  theme      TEXT NOT NULL DEFAULT '{}',
+  body_md    TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (org_id, slug)
+);

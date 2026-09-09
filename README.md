@@ -25,6 +25,11 @@ around it:
   typeface, button style, corner and canvas. A page names one and overrides what
   it wants. None of them costs a network request, because the type is a system
   stack and the gradients are CSS.
+- **A template is a document, not a dropdown.** Every look downloads as
+  markdown: the fields in a frontmatter block, then prose saying what it is for
+  and which rules matter. Edit it yourself or hand it to an agent, paste it
+  back, and it is a template your pages can wear. The prose survives the round
+  trip, so the reasoning outlives the person who had it.
 - **Contrast is not left to taste.** Button text colour is computed from the
   accent, and every preset is tested against WCAG AA for body text, subtitle and
   button label. The first `sunset` looked lovely and measured 2.32:1; the test

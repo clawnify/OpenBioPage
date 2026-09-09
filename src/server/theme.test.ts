@@ -57,8 +57,8 @@ describe("theme resolution", () => {
   it("lets a page override one field of a preset and keep the rest", () => {
     const t = resolveTheme(JSON.stringify({ preset: "ink", accent: "#2f5bd8" }));
     expect(t.accent).toBe("#2f5bd8");
-    expect(t.background).toBe(PRESETS.ink.background);
-    expect(t.button).toBe(PRESETS.ink.button);
+    expect(t.background).toBe(PRESETS.ink.theme.background);
+    expect(t.button).toBe(PRESETS.ink.theme.button);
   });
 
   it("refuses a colour that is not a colour", () => {
