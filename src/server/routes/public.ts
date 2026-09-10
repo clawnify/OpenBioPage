@@ -137,7 +137,12 @@ export function registerPublic(app: App) {
     });
 
     return new Response(html, {
-      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" },
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        // Revalidate rather than hold: the card is derived from page data its
+        // owner edits, so a stale one is wrong rather than merely old.
+        "cache-control": "public, max-age=0, must-revalidate",
+      },
     });
   });
 
@@ -155,7 +160,7 @@ export function registerPublic(app: App) {
     // platform one.
     const target = `${url.origin}/p/${encodeURIComponent(page.slug)}`;
     return new Response(qrSvg(target, { size: 512 }), {
-      headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=3600" },
+      headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=300" },
     });
   });
 

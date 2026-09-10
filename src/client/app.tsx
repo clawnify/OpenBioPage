@@ -778,7 +778,10 @@ function Card({
             {/* The real card, not a picture of one: what prints is this. */}
             <iframe
               key={cardRev}
-              src={`/p/${encodeURIComponent(page.slug)}/card`}
+              // The version goes in the URL, not just the key. Remounting the
+              // iframe re-requests the same address, which the browser answers
+              // from cache — so an uploaded picture never appeared.
+              src={`/p/${encodeURIComponent(page.slug)}/card?v=${cardRev}`}
               title={`Business card for ${page.title}`}
               scrolling="no"
               className="mt-3 block w-full rounded-lg border-0"
