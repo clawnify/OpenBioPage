@@ -19,6 +19,7 @@ import { renderPage, safeUrl, type RenderBlock, type RenderPage } from "../rende
 import { customThemeFor } from "../page-theme.js";
 import { readSocials } from "../socials.js";
 import { qrSvg } from "../qr.js";
+import { cardHtml } from "../card.js";
 import { readContact, vcard } from "../vcard.js";
 
 /** Cache the rendered page at the edge briefly: a link page is read far more
@@ -84,6 +85,59 @@ export function registerPublic(app: App) {
         "content-disposition": `attachment; filename="${c.req.param("slug")}.vcf"`,
         "cache-control": "public, max-age=300",
       },
+    });
+  });
+
+  app.get("/p/:slug/card", async (c) => {
+    const url = new URL(c.req.url);
+    const page = await get<{ slug: string; title: string; contact: string; avatar_key: string | null; theme: string }>(
+      `SELECT slug, title, contact, avatar_key, theme FROM pages
+        WHERE slug = ? AND published = 1 AND (hostname IS NULL OR hostname = ?)`,
+      [c.req.param("slug"), url.hostname],
+    );
+    if (!page) return c.text("Not found", 404);
+
+    const contact = readContact(page.contact);
+    let cardColour = "#111111";
+    try {
+      const t = JSON.parse(page.theme || "{}") as { card?: string };
+      if (typeof t.card === "string") cardColour = t.card;
+    } catch {
+      // A card without a chosen colour is still a card.
+    }
+
+    // The avatar is inlined as a data URI rather than linked. A printable file
+    // that fetches an image over the network prints as a blank square the
+    // first time it is opened somewhere without that network.
+    let avatar: string | undefined;
+    if (page.avatar_key) {
+      const object = await c.env.UPLOADS.get(page.avatar_key);
+      if (object) {
+        const bytes = new Uint8Array(await object.arrayBuffer());
+        // Only worth inlining while it stays small; a 4 MB photo would make
+        // the card slower to open than it is to hand over.
+        if (bytes.byteLength <= 512 * 1024) {
+          let binary = "";
+          for (const b of bytes) binary += String.fromCharCode(b);
+          const type = object.httpMetadata?.contentType ?? "image/png";
+          avatar = `data:${type};base64,${btoa(binary)}`;
+        }
+      }
+    }
+
+    const html = cardHtml({
+      name: contact.name || page.title,
+      title: contact.title,
+      org: contact.org,
+      email: contact.email,
+      phone: contact.phone,
+      url: `${url.origin}/p/${encodeURIComponent(page.slug)}`,
+      background: cardColour,
+      avatar,
+    });
+
+    return new Response(html, {
+      headers: { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" },
     });
   });
 

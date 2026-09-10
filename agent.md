@@ -90,6 +90,9 @@ block and the page grows a button that hands the card over.
 - `GET /p/{slug}/contact.vcf` — the card, as vCard 3.0. Published pages only.
   With no `name` of its own it goes out under the page title, so the route
   answers for any published page rather than 404ing on a half-filled card.
+- `GET /p/{slug}/card` — the printable card, as an HTML page sized to
+  54×86mm with `@page`. Open it and print; the sheet **is** the card, so
+  nothing scales it. Colour comes from `theme.card`.
 - `GET /p/{slug}/qr.svg` — a code pointing at the page, on whichever hostname
   it was asked from. A card printed from the custom domain therefore does not
   send people to the platform one.

@@ -499,6 +499,14 @@ function readSocialItems(meta: string): SocialItem[] {
     reorder(index, index + delta);
   }
 
+  const cardColour = (() => {
+    try {
+      return (JSON.parse(page?.theme ?? "{}") as { card?: string }).card ?? "#111111";
+    } catch {
+      return "#111111";
+    }
+  })();
+
   const preset = (() => {
     try {
       return (JSON.parse(page?.theme ?? "{}") as { preset?: string }).preset ?? "";
@@ -556,6 +564,9 @@ function readSocialItems(meta: string): SocialItem[] {
           page && (
             <Card
               page={page}
+              cardRev={rev}
+              colour={cardColour}
+              onColour={(c) => void write(() => api.patchPage(page.id, { theme: mergeTheme(page.theme, { card: c }) }))}
               onPatch={(contact) => void write(() => api.patchPage(page.id, { contact: JSON.stringify(contact) }))}
             />
           )
@@ -702,7 +713,19 @@ function Profile({ page, onPatch }: { page: Page; onPatch: (b: Partial<Page>) =>
  * blank is how a page says it is not one. There is no separate switch, because
  * an empty card and a disabled card are the same thing.
  */
-function Card({ page, onPatch }: { page: Page; onPatch: (c: Record<string, string>) => void }) {
+function Card({
+  page,
+  onPatch,
+  colour,
+  onColour,
+  cardRev,
+}: {
+  page: Page;
+  onPatch: (c: Record<string, string>) => void;
+  colour: string;
+  onColour: (c: string) => void;
+  cardRev: number;
+}) {
   let card: Record<string, string> = {};
   try {
     card = JSON.parse(page.contact || "{}") as Record<string, string>;
@@ -744,29 +767,52 @@ function Card({ page, onPatch }: { page: Page; onPatch: (c: Record<string, strin
         )}
       </section>
 
-      <section className="card p-5 lg:w-[240px]">
-        <h2 className="text-[1.0625rem] font-semibold">QR</h2>
-        <p className="mt-1 text-sm text-muted">Points at the page. Print it at any size.</p>
+      <section className="card p-5 lg:w-[260px]">
+        <h2 className="text-[1.0625rem] font-semibold">The card</h2>
+        <p className="mt-1 text-sm text-muted">
+          Printed at 54×86mm — the bank-card size. Print it straight from the page.
+        </p>
+
         {page.published ? (
           <>
-            <img
-              src={`/p/${encodeURIComponent(page.slug)}/qr.svg`}
-              alt={`QR code for ${page.title}`}
-              className="mt-3 w-full rounded-md"
-              width={200}
-              height={200}
+            {/* The real card, not a picture of one: what prints is this. */}
+            <iframe
+              key={cardRev}
+              src={`/p/${encodeURIComponent(page.slug)}/card`}
+              title={`Business card for ${page.title}`}
+              scrolling="no"
+              className="mt-3 block w-full rounded-lg border-0"
+              style={{ height: 340 }}
             />
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {CARD_COLOURS.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  aria-label={`Card colour ${c}`}
+                  aria-pressed={colour === c}
+                  onClick={() => onColour(c)}
+                  style={{ background: c }}
+                  className={`h-6 w-6 rounded-full ${
+                    colour === c
+                      ? "shadow-[0_0_0_2px_var(--surface),0_0_0_4px_var(--primary)]"
+                      : "shadow-[inset_0_0_0_1px_rgba(0,0,0,.18)]"
+                  }`}
+                />
+              ))}
+            </div>
             <a
-              href={`/p/${encodeURIComponent(page.slug)}/qr.svg`}
-              download
+              href={`/p/${encodeURIComponent(page.slug)}/card`}
+              target="_blank"
+              rel="noreferrer"
               className="mt-3 block text-center text-xs text-accent hover:underline"
             >
-              Download SVG
+              Open to print
             </a>
           </>
         ) : (
           <p className="mt-3 text-xs text-faint">
-            Publish the page and the code appears. It has to point somewhere a phone can reach.
+            Publish the page and the card appears. Its code has to point somewhere a phone can reach.
           </p>
         )}
       </section>
@@ -831,6 +877,13 @@ function Avatar({ page, onPick }: { page: Page; onPick: (key: string) => void })
     </span>
   );
 }
+
+/** The colours the card offers, matching `src/server/card.ts`. */
+const CARD_COLOURS = [
+  "#d8f36b", "#1f3a2e", "#e4d3f5", "#1b2a6b", "#e08b4a",
+  "#7fd695", "#161b2e", "#c0472f", "#5c1f18", "#4a9cc4",
+  "#b44ad0", "#f4f1ea", "#111111",
+] as const;
 
 /**
  * The look, as a list of decisions rather than one dropdown. Today there is a

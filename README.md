@@ -93,6 +93,7 @@ That constraint is why the typefaces are system stacks and the gradients are CSS
 | `/p/{slug}` | The public page. Plain HTML, server rendered |
 | `/r/{block}` | The counting redirect every link goes through |
 | `/p/{slug}/contact.vcf` | The contact card, as vCard |
+| `/p/{slug}/card` | The printable business card, sized to 54×86mm |
 | `/p/{slug}/qr.svg` | A QR code pointing at the page |
 | `/api/…` | The full API, documented at `/api/openapi.json` and `/llms.txt` |
 
