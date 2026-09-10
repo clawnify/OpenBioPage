@@ -12,10 +12,12 @@ not_found_handling = "single-page-application"
 # index.html for all of them. The deployed build ignores this file and reads
 # api.server_routes from clawnify.json instead, so the two lists must stay in
 # step — this one works locally and tells you nothing about production.
-# `*` matches one segment; `**` matches any depth. These paths are all nested —
-# /p/{slug}/card, /r/{block}/{platform}, /m/{org}/{file} — so a single star
-# silently excludes every one of them.
-run_worker_first = ["/api/*", "/llms.txt", "/p/**", "/r/**", "/m/**"]
+# One star here, two stars in clawnify.json's public_routes, and that is not a
+# typo. These two lists are read by different matchers: the perimeter treats
+# `*` as a single segment and needs `**` to cross a slash, while this list
+# becomes run_worker_first, where `*` already crosses slashes and `**` matches
+# nothing at all.
+run_worker_first = ["/api/*", "/llms.txt", "/p/*", "/r/*", "/m/*"]
 
 [[d1_databases]]
 binding = "DB"
