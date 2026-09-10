@@ -4,29 +4,56 @@
   "name": "OpenBioPage",
   "description": "Link-in-bio pages you own. Run one page or fifty from a single install, each on its own custom domain, with the click history in your database instead of a vendor's. An open alternative to Linktree, Beacons and Bio.link, built for agencies running pages for their clients.",
   "icon": "icon.svg",
-  "tags": ["link-in-bio", "linktree-alternative", "agency", "white-label", "marketing"],
-
+  "tags": [
+    "link-in-bio",
+    "linktree-alternative",
+    "agency",
+    "white-label",
+    "marketing"
+  ],
   "template": {
     "displayName": "Link pages",
     "category": "Marketing"
   },
-
   "app": {
     "framework": "react+hono",
     "database": true,
     "storage": true
   },
-
   "api": {
     "public_routes": [
-      { "path": "/p/*", "methods": ["GET"] },
-      { "path": "/r/*", "methods": ["GET"] },
-      { "path": "/m/*", "methods": ["GET"] },
-      { "path": "/api/public/subscribe", "methods": ["POST", "OPTIONS"] }
+      {
+        "path": "/p/**",
+        "methods": [
+          "GET"
+        ]
+      },
+      {
+        "path": "/r/**",
+        "methods": [
+          "GET"
+        ]
+      },
+      {
+        "path": "/m/**",
+        "methods": [
+          "GET"
+        ]
+      },
+      {
+        "path": "/api/public/subscribe",
+        "methods": [
+          "POST",
+          "OPTIONS"
+        ]
+      }
     ],
-    "server_routes": ["/p/*", "/r/*", "/m/*"]
+    "server_routes": [
+      "/p/**",
+      "/r/**",
+      "/m/**"
+    ]
   },
-
   "deploy": {
     "title": "Deploy your OpenBioPage",
     "subtitle": "Link pages on your own domains, with the click data in your own database.",
@@ -52,6 +79,5 @@
       }
     ]
   },
-
   "agent": "agent.md"
 }
