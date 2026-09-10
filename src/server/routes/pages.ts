@@ -15,6 +15,7 @@ const PageSchema = z
     hostname: z.string().nullable(),
     avatar_key: z.string().nullable(),
     theme: z.string(),
+    contact: z.string(),
     footer_name: z.string(),
     footer_url: z.string(),
     published: z.number().int(),
@@ -182,6 +183,10 @@ export function registerPages(app: App) {
               title: z.string().min(1).max(120).optional(),
               subtitle: z.string().max(200).optional(),
               hostname: z.string().max(253).nullable().optional(),
+              contact: z.string().max(4000).optional().openapi({
+                description:
+                  'JSON: { name, org, title, email, phone, url, address, note }. Served as a vCard at /p/{slug}/contact.vcf.',
+              }),
               theme: z.string().max(2000).optional().openapi({
                 description: 'JSON: { accent, background, foreground, corner, align }. The client brand, as CSS custom properties.',
               }),
@@ -209,7 +214,7 @@ export function registerPages(app: App) {
     // Explicit allowlist rather than trusting the parsed body's key set: these
     // names are interpolated into the SET clause, so the guard belongs here and
     // not one refactor away in the schema.
-    const EDITABLE = ["title", "subtitle", "hostname", "theme", "footer_name", "footer_url", "published"] as const;
+    const EDITABLE = ["title", "subtitle", "hostname", "theme", "contact", "footer_name", "footer_url", "published"] as const;
     const fields = Object.entries(body).filter(
       ([k, v]) => v !== undefined && (EDITABLE as readonly string[]).includes(k),
     );

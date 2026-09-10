@@ -18,6 +18,8 @@ import { uid, now, type App } from "../env.js";
 import { renderPage, safeUrl, type RenderBlock, type RenderPage } from "../render.js";
 import { customThemeFor } from "../page-theme.js";
 import { readSocials } from "../socials.js";
+import { qrSvg } from "../qr.js";
+import { readContact, vcard } from "../vcard.js";
 
 /** Cache the rendered page at the edge briefly: a link page is read far more
  *  often than it is edited, and an agency's change should still show up fast. */
@@ -52,6 +54,55 @@ export function registerPublic(app: App) {
 
     const origin = new URL(c.req.url).origin;
     return c.html(renderPage(page, blocks, origin, await customThemeFor(page.org_id, page.theme)), 200, { "Cache-Control": PAGE_CACHE });
+  });
+
+  // ── The card, and the code that points at the page ──────────────────────
+  //
+  // Both sit under /p/*, which is already a public route, and both are
+  // registered before /p/:slug so the slug pattern does not swallow them.
+
+  app.get("/p/:slug/contact.vcf", async (c) => {
+    const host = new URL(c.req.url).hostname;
+    const page = await get<{ title: string; contact: string }>(
+      `SELECT title, contact FROM pages
+        WHERE slug = ? AND published = 1 AND (hostname IS NULL OR hostname = ?)`,
+      [c.req.param("slug"), host],
+    );
+    if (!page) return c.text("Not found", 404);
+
+    const contact = readContact(page.contact);
+    // The page's own title is the fallback name. Someone who added a Save
+    // contact row wants a card, and a card naming only the page is more use to
+    // them than a 404 — so this route answers for any published page, and the
+    // editor says as much rather than promising it will not.
+    const card = vcard({ ...contact, name: contact.name || page.title });
+    if (!card) return c.text("Not found", 404);
+
+    return new Response(card, {
+      headers: {
+        "content-type": "text/vcard; charset=utf-8",
+        "content-disposition": `attachment; filename="${c.req.param("slug")}.vcf"`,
+        "cache-control": "public, max-age=300",
+      },
+    });
+  });
+
+  app.get("/p/:slug/qr.svg", async (c) => {
+    const url = new URL(c.req.url);
+    const page = await get<{ slug: string }>(
+      `SELECT slug FROM pages
+        WHERE slug = ? AND published = 1 AND (hostname IS NULL OR hostname = ?)`,
+      [c.req.param("slug"), url.hostname],
+    );
+    if (!page) return c.text("Not found", 404);
+
+    // The code points at the page on whichever hostname it was asked from, so
+    // a card printed from the custom domain does not send people to the
+    // platform one.
+    const target = `${url.origin}/p/${encodeURIComponent(page.slug)}`;
+    return new Response(qrSvg(target, { size: 512 }), {
+      headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": "public, max-age=3600" },
+    });
   });
 
   // ── The counting redirect ───────────────────────────────────────────────

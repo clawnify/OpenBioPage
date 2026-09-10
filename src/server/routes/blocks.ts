@@ -6,7 +6,7 @@ import { get, query, run } from "../db.js";
 import { fail, now, ok, uid, type App } from "../env.js";
 import { mirrorImage, readLinkMeta } from "../link-meta.js";
 
-const KINDS = ["link", "header", "embed", "email", "socials"] as const;
+const KINDS = ["link", "header", "embed", "email", "socials", "contact"] as const;
 
 const BlockSchema = z
   .object({

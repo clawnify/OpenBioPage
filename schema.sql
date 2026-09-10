@@ -22,6 +22,10 @@ CREATE TABLE pages (
   -- The public page reads these as CSS custom properties, so a client's brand
   -- never becomes a hardcoded value in a component.
   theme         TEXT NOT NULL DEFAULT '{}',
+  -- The contact card this page hands out, as JSON: name, org, title, email,
+  -- phone, url, address, note. Empty until someone fills it in, which is also
+  -- how a page says it is not a business card.
+  contact       TEXT NOT NULL DEFAULT '{}',
   -- Whose name signs the footer. Blank inherits the install default.
   footer_name   TEXT NOT NULL DEFAULT '',
   footer_url    TEXT NOT NULL DEFAULT '',

@@ -39,6 +39,10 @@ The second thing it buys: the pages tell you when they rot. A checker walks ever
 - **Paste a URL and the row fills itself in.** The destination's own title and image come back from its meta tags — a fetch, not a model call and not a screenshot. The image is copied into this app's own storage, so a page with ten thumbnails still makes zero requests to anyone else, and still tells nobody who is reading it.
 - **Eight templates, then your brand on top.** `mono`, `ink`, `paper`, `sunset`, `brutal`, `slate`, `candy`, `forest` — each a whole look, with its own typeface, button treatment, corner and canvas.
 - **A photograph can be the page.** Upload one and the header becomes a hero: the image full-bleed, the name over it.
+- **A page is also a business card.** Fill in the contact details and a
+  **Save contact** row hands over a vCard the phone opens in its contacts app,
+  with a QR code pointing at the page for the printed side. The code is
+  generated as SVG, so it prints at any size and costs no image request.
 - **A socials row that still counts.** A line of platform marks under the links,
   each one going through the same counting redirect, so a tap on Instagram is
   recorded with the platform beside it rather than vanishing into a bare
@@ -88,6 +92,8 @@ That constraint is why the typefaces are system stacks and the gradients are CSS
 | `/templates` | The gallery; download any look as markdown |
 | `/p/{slug}` | The public page. Plain HTML, server rendered |
 | `/r/{block}` | The counting redirect every link goes through |
+| `/p/{slug}/contact.vcf` | The contact card, as vCard |
+| `/p/{slug}/qr.svg` | A QR code pointing at the page |
 | `/api/…` | The full API, documented at `/api/openapi.json` and `/llms.txt` |
 
 A page is a list of blocks, and `kind` decides how each one renders:
@@ -99,6 +105,7 @@ A page is a list of blocks, and `kind` decides how each one renders:
 | `embed` | An inline player. YouTube and Spotify today |
 | `email` | A signup field that posts to this app |
 | `socials` | A row of platform marks, each counted separately |
+| `contact` | A button that hands over the page's contact card |
 
 ## Local development
 

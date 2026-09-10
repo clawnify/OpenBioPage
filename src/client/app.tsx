@@ -411,7 +411,15 @@ const KINDS: { kind: BlockKind; label: string; hint: string }[] = [
   { kind: "embed", label: "Embed", hint: "A video, played in place." },
   { kind: "email", label: "Email capture", hint: "One field and a button. Addresses land in this app." },
   { kind: "socials", label: "Socials", hint: "A row of platform marks. Each one still counts its own taps." },
+  { kind: "contact", label: "Save contact", hint: "A button that hands over a contact card. Fill the details in under Card." },
 ];
+
+/** The fields a contact card carries, in the order a card reads. */
+const CARD_FIELDS = [
+  ["name", "Name"], ["org", "Organisation"], ["title", "Role"],
+  ["email", "Email"], ["phone", "Phone"], ["url", "Website"],
+  ["address", "Address"], ["note", "Note"],
+] as const;
 
 /** The platforms the page can draw. Keep in step with `src/server/socials.ts`. */
 const PLATFORMS = [
@@ -440,7 +448,7 @@ function readSocialItems(meta: string): SocialItem[] {
   const [blocks, setBlocks] = useState<Block[]>([]);
   const [clicks, setClicks] = useState<Record<string, number>>({});
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
-  const [panel, setPanel] = useState<"rows" | "design">("rows");
+  const [panel, setPanel] = useState<"rows" | "design" | "card">("rows");
   const [error, setError] = useState<string | null>(null);
   const [rev, setRev] = useState(0);
 
@@ -498,7 +506,7 @@ function readSocialItems(meta: string): SocialItem[] {
             ← Pages
           </button>
           <div className="flex rounded-md bg-sunken p-0.5">
-            {(["rows", "design"] as const).map((t) => (
+            {(["rows", "design", "card"] as const).map((t) => (
               <button
                 key={t}
                 type="button"
@@ -535,7 +543,14 @@ function readSocialItems(meta: string): SocialItem[] {
 
         {page && <Profile page={page} onPatch={(b) => void write(() => api.patchPage(page.id, b))} />}
 
-        {panel === "design" ? (
+        {panel === "card" ? (
+          page && (
+            <Card
+              page={page}
+              onPatch={(contact) => void write(() => api.patchPage(page.id, { contact: JSON.stringify(contact) }))}
+            />
+          )
+        ) : panel === "design" ? (
           <Design
             preset={preset}
             theme={page?.theme ?? "{}"}
@@ -660,6 +675,85 @@ function Profile({ page, onPatch }: { page: Page; onPatch: (b: Partial<Page>) =>
         <p className="mt-2 font-mono text-xs text-faint">/p/{page.slug}</p>
       </div>
     </section>
+  );
+}
+
+/**
+ * The contact card the page hands out, and the code that points at the page.
+ *
+ * Filling in a name is what turns the page into a business card; leaving it
+ * blank is how a page says it is not one. There is no separate switch, because
+ * an empty card and a disabled card are the same thing.
+ */
+function Card({ page, onPatch }: { page: Page; onPatch: (c: Record<string, string>) => void }) {
+  let card: Record<string, string> = {};
+  try {
+    card = JSON.parse(page.contact || "{}") as Record<string, string>;
+  } catch {
+    // An unreadable card is replaced by the first edit rather than blocking it.
+  }
+  const named = !!(card.name ?? "").trim();
+
+  return (
+    <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]">
+      <section className="card p-5">
+        <h2 className="text-[1.0625rem] font-semibold">Contact card</h2>
+        <p className="mt-1 text-sm text-muted">
+          Add a <strong>Save contact</strong> row and this is what it hands over. Without a name of
+          its own it goes out under the page title.
+        </p>
+        <dl className="mt-4 grid gap-2 sm:grid-cols-2">
+          {CARD_FIELDS.map(([key, label]) => (
+            <div key={key} className="flex items-baseline gap-2">
+              <dt className="w-24 shrink-0 text-xs text-muted">{label}</dt>
+              <dd className="min-w-0 flex-1">
+                <InlineEdit
+                  value={card[key] ?? ""}
+                  placeholder="Not set"
+                  label={label}
+                  className="text-sm"
+                  onCommit={(v) => v !== (card[key] ?? "") && onPatch({ ...card, [key]: v })}
+                />
+              </dd>
+            </div>
+          ))}
+        </dl>
+        {!named && (
+          <p className="mt-3 text-xs text-faint">
+            With no name of its own the card goes out under the page title,
+            {" "}<strong>{page.title}</strong>. That identifies who it came from and nothing else,
+            so fill in at least an email or a phone number before handing it to anyone.
+          </p>
+        )}
+      </section>
+
+      <section className="card p-5 lg:w-[240px]">
+        <h2 className="text-[1.0625rem] font-semibold">QR</h2>
+        <p className="mt-1 text-sm text-muted">Points at the page. Print it at any size.</p>
+        {page.published ? (
+          <>
+            <img
+              src={`/p/${encodeURIComponent(page.slug)}/qr.svg`}
+              alt={`QR code for ${page.title}`}
+              className="mt-3 w-full rounded-md"
+              width={200}
+              height={200}
+            />
+            <a
+              href={`/p/${encodeURIComponent(page.slug)}/qr.svg`}
+              download
+              className="mt-3 block text-center text-xs text-accent hover:underline"
+            >
+              Download SVG
+            </a>
+          </>
+        ) : (
+          <p className="mt-3 text-xs text-faint">
+            Publish the page and the code appears. It has to point somewhere a phone can reach.
+          </p>
+        )}
+      </section>
+    </div>
   );
 }
 

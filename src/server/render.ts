@@ -104,7 +104,7 @@ export function renderPage(
     ? `https://${page.hostname}/p/${encodeURIComponent(page.slug)}`
     : `${origin}/p/${encodeURIComponent(page.slug)}`;
 
-  const rows = blocks.map((b) => renderBlock(b, origin)).filter(Boolean).join("\n");
+  const rows = blocks.map((b) => renderBlock(b, origin, page.slug)).filter(Boolean).join("\n");
 
   const footer = page.footer_name
     ? (() => {
@@ -161,7 +161,7 @@ ${footer}
 </html>`;
 }
 
-function renderBlock(b: RenderBlock, origin: string): string {
+function renderBlock(b: RenderBlock, origin: string, slug: string): string {
   const label = escapeHtml(b.label);
   let note = "";
   let thumb = "";
@@ -179,6 +179,13 @@ function renderBlock(b: RenderBlock, origin: string): string {
   }
 
   if (b.kind === "header") return `<li><h2>${label}</h2></li>`;
+
+  if (b.kind === "contact") {
+    // The href is the card itself. No script, no modal: the browser downloads
+    // a .vcf and the phone opens it in the contacts app, which is the whole
+    // interaction a paper card is competing with.
+    return `<li><a class="link" href="./${escapeHtml(slug)}/contact.vcf" download>${label}</a></li>`;
+  }
 
   if (b.kind === "socials") {
     const items = readSocials(b.meta);

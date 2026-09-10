@@ -37,7 +37,7 @@ export interface BlockStat {
   clicks_30d: number;
 }
 
-export type BlockKind = "link" | "header" | "embed" | "email" | "socials";
+export type BlockKind = "link" | "header" | "embed" | "email" | "socials" | "contact";
 
 export interface Block {
   id: string;
@@ -57,6 +57,7 @@ export interface Page {
   subtitle: string;
   hostname: string | null;
   theme: string;
+  contact: string;
   footer_name: string;
   footer_url: string;
   published: number;
@@ -97,7 +98,7 @@ export const api = {
       { method: "POST" },
     ),
   page: (id: string) => request<Page>(`/api/pages/${id}`),
-  patchPage: (id: string, body: Partial<Pick<Page, "title" | "subtitle" | "theme" | "footer_name" | "footer_url" | "published">>) =>
+  patchPage: (id: string, body: Partial<Pick<Page, "title" | "subtitle" | "theme" | "contact" | "footer_name" | "footer_url" | "published">>) =>
     request<Page>(`/api/pages/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deletePage: (id: string) => request<{ deleted: boolean }>(`/api/pages/${id}`, { method: "DELETE" }),
 
