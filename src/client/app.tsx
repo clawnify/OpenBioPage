@@ -481,13 +481,22 @@ function readSocialItems(meta: string): SocialItem[] {
     [refresh],
   );
 
-  function move(index: number, delta: number) {
+  /** The row being dragged, and the gap it is currently hovering over. */
+  const [dragging, setDragging] = useState<number | null>(null);
+  const [over, setOver] = useState<number | null>(null);
+
+  /** Commit a reorder from `from` to `to`, optimistically. */
+  function reorder(from: number, to: number) {
+    if (from === to || to < 0 || to >= blocks.length) return;
     const next = [...blocks];
-    const target = index + delta;
-    if (target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
+    const [row] = next.splice(from, 1);
+    next.splice(to, 0, row);
     setBlocks(next);
     void write(() => api.reorder(initial.id, next.map((b) => b.id)));
+  }
+
+  function move(index: number, delta: number) {
+    reorder(index, index + delta);
   }
 
   const preset = (() => {
@@ -604,6 +613,19 @@ function readSocialItems(meta: string): SocialItem[] {
                     clicks={clicks[b.id] ?? 0}
                     first={i === 0}
                     last={i === blocks.length - 1}
+                    dragging={dragging === i}
+                    over={over === i && dragging !== null && dragging !== i}
+                    onDragStart={() => setDragging(i)}
+                    onDragOver={() => setOver(i)}
+                    onDrop={() => {
+                      if (dragging !== null) reorder(dragging, i);
+                      setDragging(null);
+                      setOver(null);
+                    }}
+                    onDragEnd={() => {
+                      setDragging(null);
+                      setOver(null);
+                    }}
                     onMove={(d) => move(i, d)}
                     onPatch={(body) => void write(() => api.patchBlock(b.id, body))}
                     onDelete={() => void write(() => api.deleteBlock(b.id))}
@@ -652,12 +674,7 @@ function Phone({ src, rev, live }: { src: string; rev: number; live: boolean }) 
 function Profile({ page, onPatch }: { page: Page; onPatch: (b: Partial<Page>) => void }) {
   return (
     <section className="card mt-4 flex items-start gap-4 p-5">
-      <div
-        aria-hidden
-        className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-sunken text-lg font-semibold text-muted"
-      >
-        {page.title.slice(0, 1).toUpperCase()}
-      </div>
+      <Avatar page={page} onPick={(key) => onPatch({ avatar_key: key || null })} />
       <div className="min-w-0 flex-1">
         <InlineEdit
           value={page.title}
@@ -754,6 +771,64 @@ function Card({ page, onPatch }: { page: Page; onPatch: (c: Record<string, strin
         )}
       </section>
     </div>
+  );
+}
+
+/**
+ * The page's avatar. The whole control is the picture, because a separate
+ * "upload" button beside a thumbnail is two things where one will do.
+ */
+function Avatar({ page, onPick }: { page: Page; onPick: (key: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <span className="shrink-0">
+      <label
+        className="group relative grid h-14 w-14 cursor-pointer place-items-center overflow-hidden rounded-full bg-sunken"
+        title={page.avatar_key ? "Replace the picture" : "Add a picture"}
+      >
+        {page.avatar_key ? (
+          <img src={`/m/${page.avatar_key}`} alt="" className="h-full w-full object-cover" />
+        ) : (
+          <span aria-hidden className="text-lg font-semibold text-muted">
+            {page.title.slice(0, 1).toUpperCase()}
+          </span>
+        )}
+        <span className="absolute inset-0 grid place-items-center bg-foreground/55 text-[0.6875rem] font-medium text-background opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+          {busy ? "…" : page.avatar_key ? "Replace" : "Add"}
+        </span>
+        <input
+          type="file"
+          accept="image/*"
+          className="sr-only"
+          aria-label={page.avatar_key ? "Replace the page picture" : "Add a page picture"}
+          onChange={async (e) => {
+            const file = e.currentTarget.files?.[0];
+            if (!file) return;
+            setBusy(true);
+            setError(null);
+            try {
+              onPick((await api.upload(file)).key);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : String(err));
+            } finally {
+              setBusy(false);
+            }
+          }}
+        />
+      </label>
+      {page.avatar_key && (
+        <button
+          type="button"
+          onClick={() => onPick("")}
+          className="mt-1 block w-14 rounded-sm text-center text-[0.6875rem] text-muted hover:bg-sunken"
+        >
+          Remove
+        </button>
+      )}
+      {error && <p className="mt-1 w-14 text-[0.6875rem] text-danger">{error}</p>}
+    </span>
   );
 }
 
@@ -980,6 +1055,12 @@ function BlockCard({
   clicks,
   first,
   last,
+  dragging,
+  over,
+  onDragStart,
+  onDragOver,
+  onDrop,
+  onDragEnd,
   onMove,
   onPatch,
   onDelete,
@@ -988,10 +1069,19 @@ function BlockCard({
   clicks: number;
   first: boolean;
   last: boolean;
+  dragging: boolean;
+  over: boolean;
+  onDragStart: () => void;
+  onDragOver: () => void;
+  onDrop: () => void;
+  onDragEnd: () => void;
   onMove: (delta: number) => void;
   onPatch: (body: Partial<Pick<Block, "label" | "url" | "meta" | "active">>) => void;
   onDelete: () => void;
 }) {
+  // Only the handle starts a drag. Making the whole card draggable means every
+  // attempt to select the text in a field drags the row instead.
+  const [grabbed, setGrabbed] = useState(false);
   const takesUrl = block.kind === "link" || block.kind === "embed";
   const takesNote = block.kind === "link";
   const isSocials = block.kind === "socials";
@@ -1027,8 +1117,42 @@ function BlockCard({
   }
 
   return (
-    <li className={`card p-4 ${block.active ? "" : "opacity-60"}`}>
+    <li
+      draggable={grabbed}
+      onDragStart={(e) => {
+        // Firefox will not start a drag without data on the transfer.
+        e.dataTransfer.setData("text/plain", block.id);
+        e.dataTransfer.effectAllowed = "move";
+        onDragStart();
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        onDragOver();
+      }}
+      onDrop={(e) => {
+        e.preventDefault();
+        setGrabbed(false);
+        onDrop();
+      }}
+      onDragEnd={() => {
+        setGrabbed(false);
+        onDragEnd();
+      }}
+      className={`card p-4 transition-shadow ${block.active ? "" : "opacity-60"} ${
+        dragging ? "opacity-40" : ""
+      } ${over ? "shadow-[inset_0_0_0_2px_var(--primary)]" : ""}`}
+    >
       <div className="flex items-start gap-3">
+        <span
+          aria-hidden
+          title="Drag to reorder"
+          onMouseDown={() => setGrabbed(true)}
+          onMouseUp={() => setGrabbed(false)}
+          className="mt-0.5 cursor-grab select-none px-1 text-sm leading-none text-faint active:cursor-grabbing"
+        >
+          ⠿
+        </span>
         {image && <img src={`/m/${image}`} alt="" className="h-10 w-10 shrink-0 rounded-md object-cover" />}
 
         <div className="min-w-0 flex-1">

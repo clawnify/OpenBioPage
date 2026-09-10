@@ -124,6 +124,14 @@ those exist and neither is the right tool for four meta tags.
 Blank fields mean the page publishes none. That is normal and not an error —
 fall back to whatever label the person gave you.
 
+### The avatar
+
+`POST /api/uploads` returns a key; `PATCH /api/pages/{id}` with
+`{"avatar_key":"<key>"}` puts it at the top of the page. `null` removes it.
+This is the round avatar of the classic header — the hero header uses
+`theme.image` instead, and a page in hero does not draw the avatar as well,
+because that is the same picture twice.
+
 ### Putting a photograph behind a page
 
 `POST /api/uploads` with the image as the raw body and its real `Content-Type`

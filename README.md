@@ -35,7 +35,7 @@ The second thing it buys: the pages tell you when they rot. A checker walks ever
 ## What it does
 
 - **Many pages, one install.** Each on its own custom domain, each with its own look, all in one place with one overview.
-- **A page anyone can build.** Create it, add rows, retitle them in place, reorder, hide one without losing its click history, pick a template, publish. The real page sits beside the editor and updates on every save, so the confirmation that a change worked *is* the change.
+- **A page anyone can build.** Drag a row to reorder it, or use the arrows — both are there, because a list that can only be reordered by dragging cannot be reordered from a keyboard at all. Create it, add rows, retitle them in place, reorder, hide one without losing its click history, pick a template, publish. The real page sits beside the editor and updates on every save, so the confirmation that a change worked *is* the change.
 - **Paste a URL and the row fills itself in.** The destination's own title and image come back from its meta tags — a fetch, not a model call and not a screenshot. The image is copied into this app's own storage, so a page with ten thumbnails still makes zero requests to anyone else, and still tells nobody who is reading it.
 - **Eight templates, then your brand on top.** `mono`, `ink`, `paper`, `sunset`, `brutal`, `slate`, `candy`, `forest` — each a whole look, with its own typeface, button treatment, corner and canvas.
 - **A photograph can be the page.** Upload one and the header becomes a hero: the image full-bleed, the name over it.

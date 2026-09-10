@@ -56,6 +56,7 @@ export interface Page {
   title: string;
   subtitle: string;
   hostname: string | null;
+  avatar_key: string | null;
   theme: string;
   contact: string;
   footer_name: string;
@@ -98,7 +99,7 @@ export const api = {
       { method: "POST" },
     ),
   page: (id: string) => request<Page>(`/api/pages/${id}`),
-  patchPage: (id: string, body: Partial<Pick<Page, "title" | "subtitle" | "theme" | "contact" | "footer_name" | "footer_url" | "published">>) =>
+  patchPage: (id: string, body: Partial<Pick<Page, "title" | "subtitle" | "avatar_key" | "theme" | "contact" | "footer_name" | "footer_url" | "published">>) =>
     request<Page>(`/api/pages/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   deletePage: (id: string) => request<{ deleted: boolean }>(`/api/pages/${id}`, { method: "DELETE" }),
 
